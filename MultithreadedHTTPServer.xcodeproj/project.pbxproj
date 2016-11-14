@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0D9AE3F61DD85A4300107B0D /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 0D9AE3F51DD85A4300107B0D /* main.c */; };
+		0D9AE3F61DD85A4300107B0D /* EmbeddableWebServer.c in Sources */ = {isa = PBXBuildFile; fileRef = 0D9AE3F51DD85A4300107B0D /* EmbeddableWebServer.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -24,7 +24,7 @@
 
 /* Begin PBXFileReference section */
 		0D9AE3F21DD85A4300107B0D /* MultithreadedHTTPServer */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = MultithreadedHTTPServer; sourceTree = BUILT_PRODUCTS_DIR; };
-		0D9AE3F51DD85A4300107B0D /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
+		0D9AE3F51DD85A4300107B0D /* EmbeddableWebServer.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = EmbeddableWebServer.c; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -57,7 +57,7 @@
 		0D9AE3F41DD85A4300107B0D /* MultithreadedHTTPServer */ = {
 			isa = PBXGroup;
 			children = (
-				0D9AE3F51DD85A4300107B0D /* main.c */,
+				0D9AE3F51DD85A4300107B0D /* EmbeddableWebServer.c */,
 			);
 			path = MultithreadedHTTPServer;
 			sourceTree = "<group>";
@@ -119,7 +119,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0D9AE3F61DD85A4300107B0D /* main.c in Sources */,
+				0D9AE3F61DD85A4300107B0D /* EmbeddableWebServer.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -170,6 +170,7 @@
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
+				STRIP_INSTALLED_PRODUCT = NO;
 			};
 			name = Debug;
 		};
@@ -210,6 +211,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 10.11;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = macosx;
+				STRIP_INSTALLED_PRODUCT = NO;
 			};
 			name = Release;
 		};
