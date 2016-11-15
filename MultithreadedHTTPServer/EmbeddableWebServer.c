@@ -1,4 +1,7 @@
-// Released into the Public Domain by Forrest Heller 2016
+// Copyright Forrest Heller 2016. Released under the BSD License
+/*
+ The default distribution includes a cool rotating Earth GIF I found on Wikipedia: https://en.wikipedia.org/wiki/GIF#/media/File:Rotating_earth_(large).gif
+ It is licensed under Create Commons Attribution-Sharalike 3.0 (https://creativecommons.org/licenses/by-sa/3.0/legalcode) */
 // The latest version is probably at https://www.forrestheller.com/notes/embeddable-c-web-server.html
 
 #include <stdio.h>
@@ -15,22 +18,42 @@
 #include <assert.h>
 #include <sys/time.h>
 
-/* This is a very simple copy & pastable web server that I tested on Mac OS X and Linux. It doesn't serve files or do CGI and you have to write your own HTTP handlers. It's almost certainly insecure. It shines when:
--You need to embed a web server into an application to surface statistics/counters/status
--You need to run a web server in a bare-bones environment without Python/Apache/etc.
--You want to see the contents of every request printed out
--You don't need sophistication
+/* This is a very simple copy & pastable web server that I tested on Mac OS X and
+ Linux. You write your own HTTP handlers using the responseAlloc* functions. */
+
+/*
+ Instructions:
  
-To use:
+ Set this to 0 and define your own:
+ struct Response* createResponseForRequest(const struct Request* request, const struct Connection* connection) */
+#ifndef EWS_DEMO_RESPONSE_HANDLERS
+#define EWS_DEMO_RESPONSE_HANDLERS 1
+#endif
+
+#ifndef EWS_DEFINE_MAIN
+#define EWS_DEFINE_MAIN 1
+#endif
+/*
+ To use:
+ 1.
+ 
+ It shines when:
+ -You need to embed a web server into an application to surface statistics/counters/status
+ -You need to run a web server in a bare-bones environment without Python/Apache/etc.
+ -You want to see the contents of every request printed out
+ -You don't need sophistication
+ 
+ To use:
  1. Optional: Delete the main() from this file and call acceptConnectionsForeverFromEverywhereIPv4
  2. modify the createResponseFromRequest function to add your own handler.
-*/
- 
+ */
+
 /* History:
  Version 1.0 - released */
 
-// To embed just call this function
+// To embed just call one of these functions. They will accept connections and never return
 static int acceptConnectionsForeverFromEverywhereIPv4(uint16_t portInHostOrder);
+static int acceptConnectionsForever(const struct sockaddr* address, socklen_t addressLength);
 
 /* quick options */
 static bool OptionPrintWholeRequest = false;
@@ -39,9 +62,13 @@ static bool OptionIncludeStatusPage = true;
 /* do you want this server to serve files from OptionDocumentRoot ? */
 static bool OptionFileServingEnabled = true;
 char* OptionDocumentRoot = "./"; // it's a global so you can write this from another main()
+#define REQUEST_MAX_HEADERS 64
+#define REQUEST_HEADERS_MAX_MEMORY (16 * 1024)
+#define REQUEST_MAX_BODY_LENGTH (128 * 1024 * 1024)
 
 /* Example usage: */
 static void testsRun(); // run tests every time we start the web server
+#if EWS_DEFINE_MAIN
 int main(int argc, const char * argv[]) {
     uint16_t port = 8080;
     if (argc > 1) {
@@ -53,6 +80,7 @@ int main(int argc, const char * argv[]) {
     acceptConnectionsForeverFromEverywhereIPv4(port);
     return 0;
 }
+#endif
 
 #define EMBEDDABLE_WEB_SERVER_VERSION_STRING "1.0.0"
 #define EMBEDDABLE_WEB_SERVER_VERSION 0x00010000 // major = [31:16] minor = [15:8] build = [7:0]
@@ -77,10 +105,15 @@ struct HeapString {
     size_t capacity;
 };
 
+/* a string allocated from the request->headerStringPool */
+struct PoolString {
+    char* contents; // null-terminated
+    size_t length;
+};
+
 struct Header {
-    struct HeapString name;
-    struct HeapString value;
-    struct Header* next;
+    struct PoolString name;
+    struct PoolString value;
 };
 
 struct Request {
@@ -95,16 +128,18 @@ struct Request {
     size_t pathLength;
     /* null-terminated string containing the request body. Used for POST forms and JSON blobs */
     struct HeapString body;
-    /* linked list containing HTTP request headers */
-    struct Header* firstHeader;
-    struct Header* currentHeader;
-    struct Header* lastHeader;
+    /* HTTP request headers - use headerInRequest to find the header you're looking for. These used to be a linked list and that worked well, but it seemed overkill */
+    struct Header headers[REQUEST_MAX_HEADERS];
+    size_t headersCount;
+    /* the this->headers point at this string pool */
+    char headersStringPool[REQUEST_HEADERS_MAX_MEMORY];
+    size_t headersStringPoolOffset;
     /* internal state for the request parser */
     RequestParseState state;
 };
 
-#define RECV_BUFFER_SIZE (8 * 1024)
-#define HEADER_BUFFER_SIZE 1024
+#define SEND_RECV_BUFFER_SIZE (16 * 1024)
+#define RESPONSE_HEADER_SIZE 1024
 
 /* This contains a full HTTP connection. For every connection, a thread is spawned
  and passed this struct */
@@ -117,8 +152,8 @@ struct Connection {
     char remotePort[20];
     struct Request request;
     /* Just allocate the buffers in the connetcion */
-    char recvBuffer[RECV_BUFFER_SIZE];
-    char headerBuffer[HEADER_BUFFER_SIZE];
+    char sendRecvBuffer[SEND_RECV_BUFFER_SIZE];
+    char responseHeader[RESPONSE_HEADER_SIZE];
 };
 
 /* these counters exist solely for the purpose of the /status demo. They are declared
@@ -136,9 +171,13 @@ static struct Counters {
     long heapStringTotalBytesReallocated;
 } counters;
 
+/* You create one of these for the server to send. filenameToSend, status, and contentType will be freed so strdup them.
+ You can fill out the body field using the heapString* functions. You can also specify a filenameToSend which will be sent using regular file streaming. This is so you don't have to load the entire file into memory all at once to send it.
+ */
 struct Response {
     int code;
     struct HeapString body;
+    char* filenameToSend;
     char* status;
     char* contentType;
 };
@@ -151,11 +190,18 @@ static struct Server {
 #define __printflike(...) // clang (and maybe GCC) has this macro that can check printf/scanf format arguments
 #endif
 
-/* use these in createResponseToRequest */
+/* You fill in this function. Look at request->path for the requested URI */
+struct Response* createResponseForRequest(const struct Request* request, const struct Connection* connection);
+
+/* use these in createResponseForRequest */
 static struct Response* responseAlloc(int code, const char* status, const char* contentType, size_t contentsLength);
 static struct Response* responseAllocHTML(const char* html);
+static struct Response* responseAlloc500InternalErrorHTML(const char* extraInformationOrNull);
+static struct Response* responseAlloc404NotFoundHTML(const char* resourcePathOrNull);
 static struct Response* responseAllocHTMLWithStatus(int code, const char* status, const char* html);
 static struct Response* responseAllocWithFormat(int code, const char* status, const char* contentType, const char* format, ...) __printflike(3, 0);
+static struct Response* responseAllocWithFile(const char* filename);
+
 /* Wrappers around strdupDecodeGetorPOSTParam */
 static char* strdupDecodeGETParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound);
 static char* strdupDecodePOSTParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound);
@@ -167,10 +213,10 @@ static char* strdupEscapeForHTML(const char* stringToEscape);
 static int globalMutexLock();
 static int globalMutexUnlock();
 /* Need to inspect a header in a request? */
-static struct Header* headerInRequest(const char* headerName, const struct Request* request);
+static const struct Header* headerInRequest(const char* headerName, const struct Request* request);
 /* Get a debug string representing this connection that's easy to print out. wrap it in HTML <pre> tags */
 static struct HeapString connectionDebugStringCreate(const struct Connection* connection);
-/* Some really basic dynamic string handling. AppendChar and AppendFormat allocate enough memory and 
+/* Some really basic dynamic string handling. AppendChar and AppendFormat allocate enough memory and
  these strings are null-terminated so you can pass them into sprintf */
 static void heapStringInit(struct HeapString* string);
 static void heapStringFreeContents(struct HeapString* string);
@@ -183,8 +229,9 @@ static void heapStringAppendHeapString(struct HeapString* target, const struct H
 /* functions that help when serving files */
 static const char* MIMETypeFromFile(const char* filename, const uint8_t* contents, size_t contentsLength);
 
-/* Modify this */
-static struct Response* createResponseToRequest(const struct Request* request, const struct Connection* connection) {
+/* Modify this or copy and paste */
+#if EWS_DEMO_RESPONSE_HANDLERS
+struct Response* createResponseForRequest(const struct Request* request, const struct Connection* connection) {
     /* Here's an example of how to return a regular web page */
     if (request->path == strstr(request->path, "/status")) {
         return responseAllocWithFormat(200, "OK", "text/html; charset=UTF-8", "<html><title>Server Stats Page Example</title>"
@@ -211,22 +258,22 @@ static struct Response* createResponseToRequest(const struct Request* request, c
     if (0 == strcmp(request->path, "/")) {
         struct HeapString connectionDebugInfo = connectionDebugStringCreate(connection);
         struct Response* response = responseAllocWithFormat(200, "OK", "text/html; charset=UTF-8",
-        "<html><head><title>Embedded C Web Server Version %s</title></head>"
-        "<body>"
-        "<h2>Embedded C Web Server Version %s</h2>"
-        "Welcome to the Embedded C Web Server, a minimal web server that you copy and paste into your application. You can create your own page/app by modifying the <code>createResponseToRequest</code> function and calling <code>responseAllocWithFormat</code>\n"
-        "<h2>Check it out</h2>"
-        "<a href=\"/status\">Server Status</a><br>"
-        "<a href=\"/form_post_demo\">HTML Form POST Demo</a><br>"
-        "<a href=\"/form_get_demo\">HTML Form GET Demo</a><br>"
-        "<a href=\"/json_status_example\">JSON status example</a><br>"
-        "<a href=\"/page.html\">File server example</a><br>"
-        "<a href=\"/about\">About</a>"
-        "<h2>Connection Debug Info</h2><pre>%s</pre>"
-        "</body></html>",
-        EMBEDDABLE_WEB_SERVER_VERSION_STRING,
-        EMBEDDABLE_WEB_SERVER_VERSION_STRING,
-        connectionDebugInfo.contents);
+                                                            "<html><head><title>Embedded C Web Server Version %s</title></head>"
+                                                            "<body>"
+                                                            "<h2>Embedded C Web Server Version %s</h2>"
+                                                            "Welcome to the Embedded C Web Server, a minimal web server that you copy and paste into your application. You can create your own page/app by modifying the <code>createResponseForRequest</code> function and calling <code>responseAllocWithFormat</code>\n"
+                                                            "<h2>Check it out</h2>"
+                                                            "<a href=\"/status\">Server Status</a><br>"
+                                                            "<a href=\"/form_post_demo\">HTML Form POST Demo</a><br>"
+                                                            "<a href=\"/form_get_demo\">HTML Form GET Demo</a><br>"
+                                                            "<a href=\"/json_status_example\">JSON status example</a><br>"
+                                                            "<a href=\"/page.html\">File server example</a><br>"
+                                                            "<a href=\"/about\">About</a>"
+                                                            "<h2>Connection Debug Info</h2><pre>%s</pre>"
+                                                            "</body></html>",
+                                                            EMBEDDABLE_WEB_SERVER_VERSION_STRING,
+                                                            EMBEDDABLE_WEB_SERVER_VERSION_STRING,
+                                                            connectionDebugInfo.contents);
         heapStringFreeContents(&connectionDebugInfo);
         return response;
     }
@@ -236,12 +283,10 @@ static struct Response* createResponseToRequest(const struct Request* request, c
         struct Response* response = responseAlloc(200, "OK", "text/html; charset=UTF-8", 0);
         
         heapStringAppendString(&response->body, "<html><head><title>HTML Form POST demo | Embedded C Web Server</title></head>\n"
-        "<body>"
-        "<a href=\"/\">Home</a><br>\n"
-        "<h2>HTML Form POST demo</h2>\n"
-        "Please type a message into the tagbox. Tagboxes were popular on personal websites from the early-2000s. It's like a mini-Twitter for every site.<br>\n"
-        "<strong>Messages</string><br>"
-        "<table>");
+                               "<body>"
+                               "<a href=\"/\">Home</a><br>\n"
+                               "<h2>HTML Form POST demo</h2>\n"
+                               "Please type a message into the tagbox. Tagboxes were popular on personal websites from the early-2000s. It's like a mini-Twitter for every site.<br>\n");
         char* message = strdupDecodePOSTParam("message=", request, NULL);
         char* name = strdupDecodePOSTParam("name=", request, NULL);
         char* action = strdupDecodePOSTParam("action=", request, NULL);
@@ -267,7 +312,8 @@ static struct Response* createResponseToRequest(const struct Request* request, c
         /* open the messages file and read out the messages, creating an HTML table along the way */
         FILE* messagesFP = fopen("messages.txt", "rb");
         if (NULL != messagesFP) {
-            heapStringAppendString(&response->body, "<table>\n");
+            heapStringAppendString(&response->body, "<strong>Messages</string><br>"
+                                   "<table border=\"1\" cellspacing=\"1\" cellpadding=\"1\">");
             int c;
             bool startingNextMessage = true;
             bool grayBackground = false;
@@ -283,7 +329,7 @@ static struct Response* createResponseToRequest(const struct Request* request, c
                         grayBackground = !grayBackground;
                         startingNextMessage = false;
                     }
-                    heapStringAppendChar(&response->body, c);
+                    heapStringAppendChar(&response->body, (char) c);
                 }
             }
             heapStringAppendString(&response->body, "</table>");
@@ -293,15 +339,14 @@ static struct Response* createResponseToRequest(const struct Request* request, c
         char* nameEncoded = name ? strdupEscapeForHTML(name) : "";
         char* messageEncoded = message ? strdupEscapeForHTML(message) : "";
         heapStringAppendFormat(&response->body,
-        "<form action=\"/form_post_demo\" method=\"POST\">\n"
-        "<table>\n"
-        "<tr><td>Name</td><td><input type=\"text\" name=\"name\" value=\"%s\"></td></tr>\n"
-        "<tr><td>Message</td><td><input type=\"text\" name=\"message\" value=\"%s\"></td></tr>\n"
-        "<tr><td><input type=\"submit\" name=\"action\" value=\"Post\"></td></tr>\n"
-        "<tr><td><input type=\"submit\" name=\"action\" value=\"Clear All Messages\"></td></tr>\n"
-        "</table>\n<pre>", nameEncoded, messageEncoded);
+                               "<form action=\"/form_post_demo\" method=\"POST\">\n"
+                               "<table>\n"
+                               "<tr><td>Name</td><td><input type=\"text\" name=\"name\" value=\"%s\"></td></tr>\n"
+                               "<tr><td>Message</td><td><input type=\"text\" name=\"message\" value=\"%s\"></td></tr>\n"
+                               "<tr><td><input type=\"submit\" name=\"action\" value=\"Post\"></td></tr>\n"
+                               "<tr><td><input type=\"submit\" name=\"action\" value=\"Clear All Messages\"></td></tr>\n"
+                               "</table>\n<pre>", nameEncoded, messageEncoded);
         heapStringAppendHeapString(&response->body, &connectionDebugInfo);
-        
         heapStringAppendString(&response->body, "</pre></body></html>\n");
         
         if (NULL != name) {
@@ -315,7 +360,7 @@ static struct Response* createResponseToRequest(const struct Request* request, c
         heapStringFreeContents(&connectionDebugInfo);
         return response;
     }
-
+    
     if (request->path == strstr(request->path, "/form_get_demo")) {
         struct Response* response = responseAllocHTML("<html><head><title>GET Demo | Embedded C Web Server</title></head>\n");
         heapStringAppendString(&response->body, "<body><a href=\"/\">Home</a><br><form action=\"form_get_demo\" method=\"GET\">\n"
@@ -347,14 +392,14 @@ static struct Response* createResponseToRequest(const struct Request* request, c
          I wanted to show it's easy to use regular C strings */
         char jsonStatus[512];
         sprintf(jsonStatus, "{\n"
-                "\"active_connections\" : %ld\n"
-                "\"total_connections\" : %ld\n"
-                "\"total_bytes_sent\" : %ld\n"
-                "\"total_bytes_received\" : %ld\n"
-                "\"heap_string_allocations\" : %ld\n"
-                "\"heap_string_reallocations\" : %ld\n"
-                "\"heap_string_frees\" : %ld\n"
-                "\"heap_string_total_bytes_allocated\" : %ld\n"
+                "\t\"active_connections\" : %ld,\n"
+                "\t\"total_connections\" : %ld,\n"
+                "\t\"total_bytes_sent\" : %ld,\n"
+                "\t\"total_bytes_received\" : %ld,\n"
+                "\t\"heap_string_allocations\" : %ld,\n"
+                "\t\"heap_string_reallocations\" : %ld,\n"
+                "\t\"heap_string_frees\" : %ld,\n"
+                "\t\"heap_string_total_bytes_allocated\" : %ld\n"
                 "}",
                 counters.activeConnections,
                 counters.totalConnections,
@@ -367,11 +412,11 @@ static struct Response* createResponseToRequest(const struct Request* request, c
         struct Response* response = responseAllocWithFormat(200, "OK", "application/json", "%s" , jsonStatus);
         return response;
     }
-
+    
     if (request->path == strstr(request->path, "/about")) {
         return responseAllocHTML("<html><head><title>About</title><body>EmbeddedWebServer version 1.0 by Forrest Heller</body></html>");
     }
-
+    
     if (OptionFileServingEnabled) {
         /* make some test files really quick */
         static bool filesWritten = false;
@@ -381,7 +426,12 @@ static struct Response* createResponseToRequest(const struct Request* request, c
             if (NULL != fp) {
                 time_t t;
                 time(&t);
-                fprintf(fp, "<html><head><title>Index page</title><link rel=\"stylesheet\" href=\"style.css\"></head><body>Welcome to this page which was written at %ld</body></html>", (long) t);
+                fprintf(fp, "<html><head><title>Index page</title><link rel=\"stylesheet\" href=\"style.css\"></head><body>Welcome to this page which was written at %ld. The background should be purple and the text will be white if the external stylesheet was loaded and served correctly.<br>"
+                        "sizeof(Connection) - the main connection structure is %ld bytes.<br>"
+                        "sizeof(Request) - which is inside of the Connection structure is %ld bytes.<br>"
+                        "<img src=\"Rotating_earth_(large).gif\">\n"
+                        "</body></html>",
+                        (long) t, (long) sizeof(struct Connection), (long) sizeof(struct Request));
                 fclose(fp);
             }
             fp = fopen("style.css", "wb");
@@ -389,6 +439,19 @@ static struct Response* createResponseToRequest(const struct Request* request, c
                 fprintf(fp, "body {\n\tbackground-color: purple;\n\tcolor:white;\n}");
                 fclose(fp);
             }
+            /* this page rules! http://www.matthewflickinger.com/lab/whatsinagif/bits_and_bytes.asp */
+            static const uint8_t GIFHeader[] = {'G', 'I', 'F', '8', '9', 'a'};
+            const uint16_t canvasWidth = 200;
+            const uint16_t canvasHeight = 200;
+            const uint8_t logicalScreenDescriptor[] =
+            {canvasWidth & 0xff, canvasWidth >> 8, canvasHeight & 0xff, canvasHeight >> 8, 0x91, 0, 0};
+            const uint8_t colorTable[] = {
+                0xff, 0xff, 0xff, // white
+                0x00, 0x00, 0x00, // black
+                0x77, 0x77, 0x77, // gray
+                0x00, 0xaa, 0x00, // green
+            };
+            const uint8_t imageDescriptor[] = {0x2c, 0, 0, 0, 0, canvasWidth & 0xff, canvasWidth >> 8, canvasHeight & 0xff, canvasHeight >> 8};
             filesWritten = true;
         }
         
@@ -402,20 +465,8 @@ static struct Response* createResponseToRequest(const struct Request* request, c
         }
         char* pathWithDocumentRoot = (char*) malloc(strlen(path) + strlen(OptionDocumentRoot) + sizeof('/') + sizeof('\0'));
         sprintf(pathWithDocumentRoot, "%s/%s", OptionDocumentRoot, path);
-        /* load the entire file into memory and copy it into the request, which is pretty bad. You really want to stream the file out or use something like sendfile */
-        FILE* fp = fopen(pathWithDocumentRoot, "rb");
+        struct Response* response = responseAllocWithFile(pathWithDocumentRoot);
         free(pathWithDocumentRoot);
-        if (NULL == fp) { // no file?
-            return responseAllocHTMLWithStatus(404, "Not found", "<html><body>This path was not found</body></html>");
-        }
-        fseek(fp, 0, SEEK_END);
-        long fileLength = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
-        struct Response* response = responseAlloc(200, "OK", NULL, fileLength + 1);
-        response->body.length = fileLength;
-        fread(response->body.contents, 1, response->body.length, fp);
-        fclose(fp);
-        response->contentType = strdup(MIMETypeFromFile(path, (uint8_t*) response->body.contents, response->body.length));
         return response;
     }
     /* !!! Wait! Don't delete this one!  !!!*/
@@ -423,22 +474,7 @@ static struct Response* createResponseToRequest(const struct Request* request, c
                                        "<body><h1>404 - Not found</h1>"
                                        "The URL you requested could not be found");
 }
-
-static bool strEndsWith(const char* big, const char* endsWith) {
-    size_t bigLength = strlen(big);
-    size_t endsWithLength = strlen(endsWith);
-    if (bigLength < endsWithLength) {
-        return false;
-    }
-    
-    for (size_t i = 0; i < endsWithLength; i++) {
-        size_t bigIndex = i + (bigLength - endsWithLength);
-        if (big[bigIndex] != endsWith[i]) {
-            return false;
-        }
-    }
-    return true;
-}
+#endif
 
 /* Internal stuff */
 #ifndef MIN
@@ -451,16 +487,16 @@ static struct Connection* connectionAlloc();
 static void connectionFree(struct Connection* connection);
 static void* connectionHandlerThread(void* connectionPointer);
 static void requestParse(struct Request* request, const char* requestFragment, size_t requestFragmentLength);
-struct Header* headerAlloc();
 static size_t heapStringNextAllocationSize(size_t required);
+static void poolStringStartNewString(struct PoolString* poolString, struct Request* request);
+static void poolStringAppendChar(struct Request* request, struct PoolString* string, char c);
+static bool strEndsWith(const char* big, const char* endsWith);
 
-static struct Header* headerInRequest(const char* headerName, const struct Request* request) {
-    struct Header* header = request->firstHeader;
-    while (NULL != header) {
-        if (0 == strcasecmp(header->name.contents, headerName)) {
-            return header;
+static const struct Header* headerInRequest(const char* headerName, const struct Request* request) {
+    for (size_t i = 0; i < request->headersCount; i++) {
+        if (0 == strcasecmp(request->headers[i].name.contents, headerName)) {
+            return &request->headers[i];
         }
-        header = header->next;
     }
     return NULL;
 }
@@ -550,7 +586,7 @@ static char* strdupDecodeGETorPOSTParam(const char* paramNameIncludingEquals, co
                 } else {
                     printf("Warning: Unable to decode hex string 0x%s from %s", hexString, paramStart);
                 }
-                state = 0;
+                state = URLDecodeStateNormal;
             }
                 break;
         }
@@ -568,7 +604,7 @@ static void heapStringReallocIfNeeded(struct HeapString* string, size_t minimumC
     string->capacity = heapStringNextAllocationSize(minimumCapacity);
     assert(string->capacity > 0 && "We are about to allocate a string with 0 capacity. We should have checked this condition above");
     bool previouslyAllocated = string->contents != NULL;
-    string->contents = realloc(string->contents, string->capacity);
+    string->contents = (char*) realloc(string->contents, string->capacity);
     if (OptionIncludeStatusPage) {
         pthread_mutex_lock(&counters.lock);
         if (previouslyAllocated) {
@@ -601,7 +637,6 @@ static void heapStringAppendChar(struct HeapString* string, char c) {
 
 static void heapStringAppendFormat(struct HeapString* string, const char* format, ...) {
     va_list ap;
-    /* Figure out how many characters it would take to print the string */
     va_start(ap, format);
     heapStringAppendFormatV(string, format, ap);
     va_end(ap);
@@ -609,7 +644,7 @@ static void heapStringAppendFormat(struct HeapString* string, const char* format
 
 static void heapStringSetToCString(struct HeapString* heapString, const char* cString) {
     size_t cStringLength = strlen(cString);
-    heapStringReallocIfNeeded(heapString, cStringLength);
+    heapStringReallocIfNeeded(heapString, cStringLength + 1);
     memcpy(heapString->contents, cString, cStringLength);
     heapString->length = cStringLength;
     heapString->contents[heapString->length] = '\0';
@@ -740,15 +775,14 @@ static void heapStringFreeContents(struct HeapString* string) {
 static struct HeapString connectionDebugStringCreate(const struct Connection* connection) {
     struct HeapString debugString = {0};
     heapStringAppendFormat(&debugString, "%s from %s:%s\n", connection->request.method, connection->remoteHost, connection->remotePort);
-    struct Header* header = connection->request.firstHeader;
     bool firstHeader = true;
-    while (NULL != header) {
+    heapStringAppendString(&debugString, "\n*** Request Headers ***\n");
+    for (size_t i = 0; i < connection->request.headersCount; i++) {
         if (firstHeader) {
-            heapStringAppendFormat(&debugString, "\n*** Request Headers ***\n");
             firstHeader = false;
         }
+        const struct Header* header = &connection->request.headers[i];
         heapStringAppendFormat(&debugString, "'%s' = '%s'\n", header->name.contents, header->value.contents);
-        header = header->next;
     }
     if (NULL != connection->request.body.contents) {
         heapStringAppendFormat(&debugString, "\n*** Request Body ***\n%s\n", connection->request.body.contents);
@@ -756,16 +790,35 @@ static struct HeapString connectionDebugStringCreate(const struct Connection* co
     return debugString;
 }
 
-
-struct Header* headerAlloc() {
-    struct Header* header = (struct Header*) calloc(1, sizeof(*header));
-    return header;
+static void poolStringStartNewString(struct PoolString* poolString, struct Request* request) {
+    /* always re-initialize the length...just in case */
+    poolString->length = 0;
+    
+    /* this is the first string in the pool */
+    if (0 == request->headersStringPoolOffset) {
+        poolString->contents = request->headersStringPool;
+        return;
+    }
+    /* the pool string is full - don't initialize anything writable and ensure any writing to this pool string crashes */
+    if (request->headersStringPoolOffset >= REQUEST_HEADERS_MAX_MEMORY - 1) { // -1 is because the last pool string needs to be null-terminated
+        poolString->length = 0;
+        poolString->contents = NULL;
+        return;
+    }
+    /* there's already another string in the pool - we need to skip the null character (the string pool is initialized to 0s by calloc) */
+    request->headersStringPoolOffset++;
+    poolString->contents = &request->headersStringPool[request->headersStringPoolOffset];
+    poolString->length = 0;
 }
 
-static void headerFree(struct Header* header) {
-    heapStringFreeContents(&header->value);
-    heapStringFreeContents(&header->name);
-    free(header);
+static void poolStringAppendChar(struct Request* request, struct PoolString* string, char c) {
+    if (request->headersStringPoolOffset >= REQUEST_HEADERS_MAX_MEMORY - 1) {
+        printf("Warning: header string pool is exhausted\n"); // TODO: this is going to print a lot when the pool is exhausted
+        return;
+    }
+    string->contents[string->length] = c;
+    string->length++;
+    request->headersStringPoolOffset++;
 }
 
 // allocates a response with content = malloc(contentLength + 1) so you can write null-terminated strings to it
@@ -808,9 +861,35 @@ static struct Response* responseAllocWithFormat(int code, const char* status, co
     return response;
 }
 
+static struct Response* responseAlloc404NotFoundHTML(const char* resourcePathOrNull) {
+    if (NULL == resourcePathOrNull) {
+        return responseAllocHTMLWithStatus(404, "Not Found", "<html><head><title>404 Not Found</title></head><body>The resource you specified could not be found</body></html>");
+    } else {
+        return responseAllocWithFormat(404, "Not Found", "text/html; charset=UTF-8", "<html><head><title>404 Not Found</title></head><body>The resource you specified ('%s') could not be found</body></html>", resourcePathOrNull);
+    }
+}
+
+static struct Response* responseAlloc500InternalErrorHTML(const char* extraInformationOrNull) {
+    if (NULL == extraInformationOrNull) {
+        return responseAllocHTMLWithStatus(500, "Internal Error", "<html><head><title>500 Internal Error</title></head><body>There was an internal error while completing your request</body></html>");
+    } else {
+        return responseAllocWithFormat(500, "Internal Error", "text/html; charset=UTF-8", "<html><head><title>500 Internal Error</title></head><body>There was an internal error while completing your request. %s</body></html>", extraInformationOrNull);
+    }
+    
+}
+
+static struct Response* responseAllocWithFile(const char* filename) {
+    struct Response* response = responseAlloc(200, "OK", NULL, 0);
+    response->filenameToSend = strdup(filename);
+    return response;
+}
+
 static void responseFree(struct Response* response) {
     free(response->status);
     heapStringFreeContents(&response->body);
+    if (NULL != response->filenameToSend) {
+        free(response->filenameToSend);
+    }
     free(response->contentType);
     free(response);
 }
@@ -829,7 +908,7 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                 } else {
                     printf("Warning: request method %s is too long...\n", request->method);
                 }
-            break;
+                break;
             case RequestParseStatePath:
                 if (c == ' ') {
                     request->state = RequestParseStateVersion;
@@ -839,7 +918,7 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                 } else {
                     printf("Warning: request path %s is too long...\n", request->path);
                 }
-            break;
+                break;
             case RequestParseStateVersion:
                 if (c == '\r') {
                     request->state = RequestParseStateCR;
@@ -849,47 +928,51 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                 } else {
                     printf("Warning: request version %s is too long...\n", request->version);
                 }
-            break;
+                break;
             case RequestParseStateHeaderName:
                 if (c == ':') {
-                    if (NULL != request->currentHeader && NULL != request->lastHeader) {
-                        request->state = RequestParseStateHeaderValue;
-                    }
+                    request->state = RequestParseStateHeaderValue;
                 } else if (c == '\r') {
                     request->state = RequestParseStateCR;
                 } else {
-                    if (NULL == request->firstHeader) {
-                        request->firstHeader = headerAlloc();
-                        request->lastHeader = request->firstHeader;
-                        request->currentHeader = request->firstHeader;
+                    if (request->headersCount < REQUEST_MAX_HEADERS) {
+                        /* if this is the first character in this header name, then initialize the string pool */
+                        if (NULL == request->headers[request->headersCount].name.contents) {
+                            poolStringStartNewString(&request->headers[request->headersCount].name, request);
+                        }
+                        /* store the header name in the string pool */
+                        poolStringAppendChar(request, &request->headers[request->headersCount].name, c);
                     }
-                    if (NULL == request->currentHeader) {
-                        request->currentHeader = headerAlloc();
-                    }
-                    heapStringAppendChar(&request->currentHeader->name, c);
-                }
-            break;
-            case RequestParseStateHeaderValue:
-                /* skip the first space */
-                if (c == ' ' && request->currentHeader->value.length == 0) {
-                    continue;
-                } else if (c == '\r') {
-                    request->lastHeader->next = request->currentHeader;
-                    request->lastHeader =request->currentHeader;
-                    request->currentHeader = NULL;
-                    request->state = RequestParseStateCR;
-                } else {
-                    heapStringAppendChar(&request->currentHeader->value, c);
                 }
                 break;
-            break;
+            case RequestParseStateHeaderValue:
+                /* skip the first space */
+                if (c == ' ' && request->headers[request->headersCount].value.length == 0) {
+                    continue;
+                } else if (c == '\r') {
+                    if (request->headersCount < REQUEST_MAX_HEADERS) {
+                        request->headersCount++;
+                    }
+                    request->state = RequestParseStateCR;
+                } else {
+                    if (request->headersCount < REQUEST_MAX_HEADERS) {
+                        /* if this is the first character in this header name, then initialize the string pool */
+                        if (NULL == request->headers[request->headersCount].value.contents) {
+                            poolStringStartNewString(&request->headers[request->headersCount].value, request);
+                        }
+                        /* store the header name in the string pool */
+                        poolStringAppendChar(request, &request->headers[request->headersCount].value, c);
+                    }
+                }
+                break;
+                break;
             case RequestParseStateCR:
                 if (c == '\n') {
                     request->state = RequestParseStateCRLF;
                 } else {
                     request->state = RequestParseStateHeaderName;
                 }
-            break;
+                break;
             case RequestParseStateCRLF:
                 if (c == '\r') {
                     request->state = RequestParseStateCRLFCR;
@@ -898,12 +981,12 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                     /* this is the first character of the header - replay the HeaderName case so this character gets appended */
                     i--;
                 }
-            break;
+                break;
             case RequestParseStateCRLFCR:
                 if (c == '\n') {
                     /* assume the request state is done unless we have some Content-Length, which would come from something like a JSON blob */
                     request->state = RequestParseStateDone;
-                    struct Header* contentLengthHeader = headerInRequest("Content-Length", request);
+                    const struct Header* contentLengthHeader = headerInRequest("Content-Length", request);
                     if (NULL != contentLengthHeader) {
                         printf("Incoming request has a body of length %s\n", contentLengthHeader->value.contents);
                         long contentLength = 0;
@@ -919,16 +1002,16 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                 } else {
                     request->state = RequestParseStateHeaderName;
                 }
-            break;
+                break;
             case RequestParseStateBody:
                 request->body.contents[request->body.length] = c;
                 request->body.length++;
                 if (request->body.length == request->body.capacity) {
                     request->state = RequestParseStateDone;
                 }
-            break;
+                break;
             case RequestParseStateDone:
-            break;
+                break;
         }
     }
 }
@@ -941,23 +1024,31 @@ static struct Connection* connectionAlloc() {
 }
 
 static void connectionFree(struct Connection* connection) {
-    /* free all the request headers */
-    struct Header* header = connection->request.firstHeader;
-    while (NULL != header) {
-        struct Header* headerToFree = header;
-        header = header->next;
-        headerFree(headerToFree);
-    }
-    /* if an incomplete header was found, then go ahead and free that separately */
-    if (NULL != connection->request.currentHeader && connection->request.currentHeader != connection->request.lastHeader) {
-        headerFree(connection->request.lastHeader);
-    }
     /* free the body */
     heapStringFreeContents(&connection->request.body);
     free(connection);
 }
-
 static int acceptConnectionsForeverFromEverywhereIPv4(uint16_t portInHostOrder) {
+    /* In order to keep the code really short I've just assumed
+     we want to bind to 0.0.0.0, which is all available interfaces.
+     What you actually want to do is call getaddrinfo on command line arguments
+     to let users specify the interface and port */
+    struct sockaddr_in anyInterfaceIPv4 = {0};
+    anyInterfaceIPv4.sin_addr.s_addr = INADDR_ANY; // also popular inet_addr("127.0.0.1") which is INADDR_LOOPBACK
+    anyInterfaceIPv4.sin_family = AF_INET;
+    anyInterfaceIPv4.sin_port = htons(portInHostOrder);
+    return acceptConnectionsForever((struct sockaddr*) &anyInterfaceIPv4, sizeof(anyInterfaceIPv4));
+}
+
+static int acceptConnectionsForever(const struct sockaddr* address, socklen_t addressLength) {
+    char addressHost[256];
+    char addressPort[20];
+    int nameResult = getnameinfo(address, addressLength, addressHost, sizeof(addressHost), addressPort, sizeof(addressPort), NI_NUMERICHOST | NI_NUMERICSERV);
+    if (0 != nameResult) {
+        strcpy(addressHost, "Unknown");
+        strcpy(addressPort, "Unknown");
+    }
+    
     int listenerfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listenerfd <= 0) {
         printf("Could not create listener socket: %s = %d\n", strerror(errno), errno);
@@ -972,17 +1063,9 @@ static int acceptConnectionsForeverFromEverywhereIPv4(uint16_t portInHostOrder) 
         printf("Failed to setsockopt SE_REUSEADDR = true with %s = %d. Continuing because we might still succeed...\n", strerror(errno), errno);
     }
     
-    /* In order to keep the code really short I've just assumed
-     we want to bind to 0.0.0.0, which is all available interfaces.
-     What you actually want to do is call getaddrinfo on command line arguments
-     to let users specify the interface and port */
-    struct sockaddr_in anyInterfaceIPv4 = {0};
-    anyInterfaceIPv4.sin_addr.s_addr = INADDR_ANY; // also popular inet_addr("127.0.0.1") which is INADDR_LOOPBACK
-    anyInterfaceIPv4.sin_family = AF_INET;
-    anyInterfaceIPv4.sin_port = htons(portInHostOrder);
-    result = bind(listenerfd, (struct sockaddr*) &anyInterfaceIPv4, sizeof(anyInterfaceIPv4));
+    result = bind(listenerfd, address, addressLength);
     if (0 != result) {
-        printf("Could not bind to 0.0.0.0:%u: %s = %d\n", portInHostOrder, strerror(errno), errno);
+        printf("Could not bind to %s:%s %s = %d\n", addressHost, addressPort, strerror(errno), errno);
         return 1;
     }
     /* listen for the maximum possible amount of connections */
@@ -990,8 +1073,18 @@ static int acceptConnectionsForeverFromEverywhereIPv4(uint16_t portInHostOrder) 
     if (0 != result) {
         printf("Could not listen for SOMAXCONN (%d) connections. %s = %d. Continuing because we might still succeed...\n", SOMAXCONN, strerror(errno), errno);
     }
-    printIPv4Addresses(portInHostOrder);
-    printf("Listening for connections from anywhere on port %u...\n", portInHostOrder);
+    /* print out the addresses we're listening on. Special-case IPv4 0.0.0.0 bind-to-all-interfaces */
+    bool printed = false;
+    if (address->sa_family == AF_INET) {
+        struct sockaddr_in* addressIPv4 = (struct sockaddr_in*) address;
+        if (INADDR_ANY == addressIPv4->sin_addr.s_addr) {
+            printIPv4Addresses(ntohs(addressIPv4->sin_port));
+            printed = true;
+        }
+    }
+    if (!printed) {
+        printf("Listening for connections on %s:%s\n", addressHost, addressPort);
+    }
     pthread_mutex_init(&counters.lock, NULL);
     pthread_mutex_init(&server.globalMutex, NULL);
     /* allocate a connection (which sets connection->remoteAddrLength) and accept the next inbound connection */
@@ -1002,37 +1095,26 @@ static int acceptConnectionsForeverFromEverywhereIPv4(uint16_t portInHostOrder) 
         pthread_create(&connectionThread, NULL, &connectionHandlerThread, nextConnection);
         nextConnection = connectionAlloc();
     }
+    pthread_mutex_destroy(&counters.lock);
+    pthread_mutex_destroy(&server.globalMutex);
     printf("exiting because accept failed (probably interrupted) %s = %d\n", strerror(errno), errno);
     return 0;
 }
 
-//static int sendAll(int fd, const void* buffer, size_t bufferLength) {
-//    size_t sent = 0;
-//    while (sent < bufferLength) {
-//        size_t bytesToSend = bufferLength - sent;
-//        ssize_t result = send(fd, buffer, bufferLength, 0);
-//        if (-1 == result) {
-//            return -1;
-//        }
-//        sent += result;
-//    }
-//    return sent;
-//}
-
-static int sendResponse(struct Connection* connection, const struct Response* response, ssize_t* bytesSent) {
+static int sendResponseBody(struct Connection* connection, const struct Response* response, ssize_t* bytesSent) {
     /* First send the response HTTP headers */
-    size_t headerLength = snprintf(connection->headerBuffer,
-                                   sizeof(connection->headerBuffer),
-                                  "HTTP/1.0 %d %s\r\n"
-                                  "Content-Type: %s\r\n"
-                                  "Content-Length: %ld\r\n"
-                                  "\r\n",
-                                  response->code,
-                                  response->status,
-                                  response->contentType,
-                                  (long)response->body.length);
+    size_t headerLength = snprintf(connection->responseHeader,
+                                   sizeof(connection->responseHeader),
+                                   "HTTP/1.0 %d %s\r\n"
+                                   "Content-Type: %s\r\n"
+                                   "Content-Length: %ld\r\n"
+                                   "\r\n",
+                                   response->code,
+                                   response->status,
+                                   response->contentType,
+                                   (long)response->body.length);
     ssize_t sendResult;
-    sendResult = send(connection->socketfd, connection->headerBuffer, headerLength, 0);
+    sendResult = send(connection->socketfd, connection->responseHeader, headerLength, 0);
     if (sendResult != headerLength) {
         printf("Failed to respond to %s:%s because we could not send the HTTP response *header*. send returned %ld with %s = %d\n",
                connection->remoteHost,
@@ -1054,8 +1136,118 @@ static int sendResponse(struct Connection* connection, const struct Response* re
                    errno);
             return -1;
         }
+        return 0;
     }
     return 0;
+}
+
+static int sendResponseFile(struct Connection* connection, const struct Response* response, ssize_t* bytesSent) {
+    /* For high performance we really want to use sendfile. However I want the code to work on Windows some day
+     and we really don't need that level of performance right now. Also there's no stat on Windows. Also Windows
+     almost certainly has some nicer higher-performance equivalent of sendfile. */
+    struct Response* errorResponse = NULL;
+    FILE* fp = fopen(response->filenameToSend, "rb");
+    int result = 0;
+    long fileLength;
+    ssize_t sendResult;
+    size_t headerLength;
+    size_t actualMIMEReadSize;
+    const char* contentType = NULL;
+    const size_t MIMEReadSize = 100;
+    if (NULL == fp) {
+        printf("Unable to satisfy request for '%s' because we could not open the file '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+        errorResponse = responseAlloc404NotFoundHTML(connection->request.path);
+        goto exit;
+    }
+    assert(sizeof(connection->sendRecvBuffer) >= MIMEReadSize);
+    actualMIMEReadSize = fread(connection->sendRecvBuffer, 1, MIMEReadSize, fp);
+    if (-1 == actualMIMEReadSize) {
+        printf("Unable to satisfy request for '%s' because we could read the first bunch of bytes to determine MIME type '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+        errorResponse = responseAlloc500InternalErrorHTML("fread for MIME type detection failed");
+        goto exit;
+    }
+    contentType = MIMETypeFromFile(response->filenameToSend, (const uint8_t*) connection->sendRecvBuffer, actualMIMEReadSize);
+    /* get the file length, laboriously checking for errors */
+    result = fseek(fp, 0, SEEK_END);
+    if (0 != result) {
+        printf("Unable to satisfy request for '%s' because we could not fseek to the end of the file '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+        errorResponse = responseAlloc500InternalErrorHTML("fseek to end of file failed");
+        goto exit;
+    }
+    fileLength = ftell(fp);
+    if (fileLength < 0) {
+        printf("Unable to satisfy request for '%s' because we could not ftell on the file '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+        errorResponse = responseAlloc500InternalErrorHTML("ftell to determine file length failed");
+        goto exit;
+    }
+    result = fseek(fp, 0, SEEK_SET);
+    if (0 != result) {
+        printf("Unable to satisfy request for '%s' because we could not fseek to the beginning of the file '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+        errorResponse = responseAlloc500InternalErrorHTML("fseek to beginning of file to start sending failed");
+        goto exit;
+    }
+    
+    /* now we have the file length + MIME TYpe and we can send the header */
+    headerLength = snprintf(connection->responseHeader,
+                            sizeof(connection->responseHeader),
+                            "HTTP/1.0 %d %s\r\n"
+                            "Content-Type: %s\r\n"
+                            "Content-Length: %ld\r\n"
+                            "\r\n",
+                            response->code,
+                            response->status,
+                            contentType,
+                            fileLength);
+    sendResult = send(connection->socketfd, connection->responseHeader, headerLength, 0);
+    if (sendResult != headerLength) {
+        printf("Unable to satisfy request for '%s' because we could not send the HTTP header '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+        fclose(fp);
+        return 1;
+    }
+    *bytesSent = sendResult;
+    /* read the whole file, just buffering into the connection buffer, and sending it out to the socket */
+    while (!feof(fp)) {
+        size_t bytesRead = fread(connection->sendRecvBuffer, 1, sizeof(connection->sendRecvBuffer), fp);
+        if (0 == bytesRead) { /* peacefull end of file */
+            break;
+        }
+        if (-1 == bytesRead) {
+            printf("Unable to satisfy request for '%s' because there was an error freading. '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+            errorResponse = responseAlloc500InternalErrorHTML("Could not fread to send over socket");
+            goto exit;
+        }
+        /* send the data out the socket to the network */
+        sendResult = send(connection->socketfd, connection->sendRecvBuffer, bytesRead, 0);
+        if (sendResult != bytesRead) {
+            printf("Unable to satisfy request for '%s' because there was an error sending bytes. '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+            result = 1;
+            goto exit;
+        }
+        *bytesSent = *bytesSent + sendResult;
+    }
+exit:
+    if (NULL != fp) {
+        fclose(fp);
+    }
+    if (NULL != errorResponse) {
+        ssize_t errorBytesSent = 0;
+        result = sendResponseBody(connection, errorResponse, &errorBytesSent);
+        *bytesSent = *bytesSent + errorBytesSent;
+        return result;
+    }
+    return result;
+}
+
+static int sendResponse(struct Connection* connection, const struct Response* response, ssize_t* bytesSent) {
+    if (response->body.length > 0) {
+        return sendResponseBody(connection, response, bytesSent);
+    }
+    if (NULL != response->filenameToSend) {
+        return sendResponseFile(connection, response, bytesSent);
+    }
+    printf("Error: the request for '%s' failed because there was neither a response body nor a filenameToSend\n", response->filenameToSend);
+    assert(0 && "See above printf");
+    return 1;
 }
 
 static void* connectionHandlerThread(void* connectionPointer) {
@@ -1072,14 +1264,14 @@ static void* connectionHandlerThread(void* connectionPointer) {
     bool madeRequestPrintf = false;
     bool foundRequest = false;
     ssize_t bytesRead;
-    while ((bytesRead = recv(connection->socketfd, connection->recvBuffer, RECV_BUFFER_SIZE, 0)) > 0) {
+    while ((bytesRead = recv(connection->socketfd, connection->sendRecvBuffer, SEND_RECV_BUFFER_SIZE, 0)) > 0) {
         if (OptionPrintWholeRequest) {
-            fwrite(connection->recvBuffer, 1, bytesRead, stdout);
+            fwrite(connection->sendRecvBuffer, 1, bytesRead, stdout);
         }
         pthread_mutex_lock(&counters.lock);
         counters.bytesReceived += bytesRead;
         pthread_mutex_unlock(&counters.lock);
-        requestParse(&connection->request, connection->recvBuffer, bytesRead);
+        requestParse(&connection->request, connection->sendRecvBuffer, bytesRead);
         if (connection->request.state >= RequestParseStateVersion && !madeRequestPrintf) {
             printf("Request from %s:%s: %s to %s version %s\n",
                    connection->remoteHost,
@@ -1096,7 +1288,7 @@ static void* connectionHandlerThread(void* connectionPointer) {
     }
     ssize_t bytesSent = 0;
     if (foundRequest) {
-        struct Response* response = createResponseToRequest(&connection->request, connection);
+        struct Response* response = createResponseForRequest(&connection->request, connection);
         if (NULL != response) {
             int result = sendResponse(connection, response, &bytesSent);
             if (0 == result) {
@@ -1197,6 +1389,22 @@ static const char* MIMETypeFromFile(const char* filename, const uint8_t* content
     }
     /* well that's pretty much all the different file types in existence */
     return "application/binary";
+}
+
+static bool strEndsWith(const char* big, const char* endsWith) {
+    size_t bigLength = strlen(big);
+    size_t endsWithLength = strlen(endsWith);
+    if (bigLength < endsWithLength) {
+        return false;
+    }
+    
+    for (size_t i = 0; i < endsWithLength; i++) {
+        size_t bigIndex = i + (bigLength - endsWithLength);
+        if (big[bigIndex] != endsWith[i]) {
+            return false;
+        }
+    }
+    return true;
 }
 
 static void testHeapString() {
