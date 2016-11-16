@@ -17,6 +17,7 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <sys/time.h>
+#include <signal.h>
 
 /* This is a very simple copy & pastable web server that I tested on Mac OS X and
  Linux. You write your own HTTP handlers using the responseAlloc* functions. */
@@ -33,6 +34,10 @@
 #ifndef EWS_DEFINE_MAIN
 #define EWS_DEFINE_MAIN 1
 #endif
+
+#define ews_printf printf
+#define ews_printf_debug(...)
+
 /*
  To use:
  1.
@@ -52,16 +57,19 @@
  Version 1.0 - released */
 
 // To embed just call one of these functions. They will accept connections and never return
-static int acceptConnectionsForeverFromEverywhereIPv4(uint16_t portInHostOrder);
-static int acceptConnectionsForever(const struct sockaddr* address, socklen_t addressLength);
+int acceptConnectionsForeverFromEverywhereIPv4(uint16_t portInHostOrder);
+int acceptConnectionsForever(const struct sockaddr* address, socklen_t addressLength);
 
-/* quick options */
+/* Quick nifty options */
+
 static bool OptionPrintWholeRequest = false;
-/* /status page - makes reallocating heap strings take a lock ewww */
-static bool OptionIncludeStatusPage = true;
+/* /status page - makes quite a few things take a lock to update counters but it doesn't make much of a difference. This isn't something like Nginx or Haywire*/
+static bool OptionIncludeStatusPageAndCounters = true;
 /* do you want this server to serve files from OptionDocumentRoot ? */
 static bool OptionFileServingEnabled = true;
-char* OptionDocumentRoot = "./"; // it's a global so you can write this from another main()
+char* OptionDocumentRoot = "."; // it's a global so you can write this elsewhere
+
+/* These bound the memory used by a request. The headers used to be dynamically allocated but I've made them hard coded because: 1. Memory used by a request should be bounded 2. It was responsible for 2 * headersCount allocations every request */
 #define REQUEST_MAX_HEADERS 64
 #define REQUEST_HEADERS_MAX_MEMORY (16 * 1024)
 #define REQUEST_MAX_BODY_LENGTH (128 * 1024 * 1024)
@@ -76,7 +84,9 @@ int main(int argc, const char * argv[]) {
         sscanf(argv[1], "%d", &portScanned);
         port = (uint16_t) portScanned;
     }
+    printf("Running unit tests...\n");
     testsRun();
+    printf("Unit tests passed. Accepting connections from everywhere...\n");
     acceptConnectionsForeverFromEverywhereIPv4(port);
     return 0;
 }
@@ -116,6 +126,8 @@ struct Header {
     struct PoolString value;
 };
 
+/* You'll look directly at this struct to handle HTTP requests. It's initialized
+   by setting everything to 0 */
 struct Request {
     /* null-terminated HTTP method (GET, POST, PUT, ...) */
     char method[64];
@@ -134,6 +146,18 @@ struct Request {
     /* the this->headers point at this string pool */
     char headersStringPool[REQUEST_HEADERS_MAX_MEMORY];
     size_t headersStringPoolOffset;
+    /* Since this has many fixed fields, we report when we went over the limit */
+    struct Warnings {
+        /* Was some header information discarded because there was not enough room in the pool? */
+        bool headersStringPoolExhausted;
+        /* Were there simply too many headers in this request for us to handle them all? */
+        bool headersTooManyDropped;
+        /* request line strings truncated? */
+        bool methodTruncated;
+        bool versionTruncated;
+        bool pathTruncated;
+        bool bodyTruncated;
+    } warnings;
     /* internal state for the request parser */
     RequestParseState state;
 };
@@ -141,23 +165,30 @@ struct Request {
 #define SEND_RECV_BUFFER_SIZE (16 * 1024)
 #define RESPONSE_HEADER_SIZE 1024
 
+struct ConnectionStatus {
+    size_t bytesSent;
+    size_t bytesReceived;
+};
+
 /* This contains a full HTTP connection. For every connection, a thread is spawned
  and passed this struct */
 struct Connection {
+    /* Just allocate the buffers in the connection. These go at the beginning of
+     the connection to make sure they're more aligned (should be aligned to at least 16 bytes) */
+    char sendRecvBuffer[SEND_RECV_BUFFER_SIZE];
+    char responseHeader[RESPONSE_HEADER_SIZE];
     int socketfd;
     /* Who connected? */
     struct sockaddr_storage remoteAddr;
     socklen_t remoteAddrLength;
     char remoteHost[128];
-    char remotePort[20];
+    char remotePort[16];
+    struct ConnectionStatus status;
     struct Request request;
-    /* Just allocate the buffers in the connetcion */
-    char sendRecvBuffer[SEND_RECV_BUFFER_SIZE];
-    char responseHeader[RESPONSE_HEADER_SIZE];
 };
 
 /* these counters exist solely for the purpose of the /status demo. They are declared
- as longs so they can be printf'd in a cross platform way. Otherwise I would declare them
+ as longs so they can be ews_printf'd in a cross platform way. Otherwise I would declare them
  int64_t's */
 static struct Counters {
     pthread_mutex_t lock;
@@ -184,6 +215,7 @@ struct Response {
 
 static struct Server {
     pthread_mutex_t globalMutex; // for convenience
+    bool shouldRun;
 } server;
 
 #ifndef __printflike
@@ -194,30 +226,30 @@ static struct Server {
 struct Response* createResponseForRequest(const struct Request* request, const struct Connection* connection);
 
 /* use these in createResponseForRequest */
-static struct Response* responseAlloc(int code, const char* status, const char* contentType, size_t contentsLength);
-static struct Response* responseAllocHTML(const char* html);
-static struct Response* responseAlloc500InternalErrorHTML(const char* extraInformationOrNull);
-static struct Response* responseAlloc404NotFoundHTML(const char* resourcePathOrNull);
-static struct Response* responseAllocHTMLWithStatus(int code, const char* status, const char* html);
-static struct Response* responseAllocWithFormat(int code, const char* status, const char* contentType, const char* format, ...) __printflike(3, 0);
-static struct Response* responseAllocWithFile(const char* filename);
+struct Response* responseAlloc(int code, const char* status, const char* contentType, size_t contentsLength);
+struct Response* responseAllocHTML(const char* html);
+struct Response* responseAlloc500InternalErrorHTML(const char* extraInformationOrNull);
+struct Response* responseAlloc404NotFoundHTML(const char* resourcePathOrNull);
+struct Response* responseAllocHTMLWithStatus(int code, const char* status, const char* html);
+struct Response* responseAllocWithFormat(int code, const char* status, const char* contentType, const char* format, ...) __printflike(3, 0);
+struct Response* responseAllocWithFile(const char* filename);
 
 /* Wrappers around strdupDecodeGetorPOSTParam */
-static char* strdupDecodeGETParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound);
-static char* strdupDecodePOSTParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound);
+char* strdupDecodeGETParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound);
+char* strdupDecodePOSTParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound);
 /* You can pass this the request->path for GET or request->body.contents for POST. Accepts NULL for paramString for convenience */
-static char* strdupDecodeGETorPOSTParam(const char* paramNameIncludingEquals, const char* paramString, const char* valueIfNotFound);
+char* strdupDecodeGETorPOSTParam(const char* paramNameIncludingEquals, const char* paramString, const char* valueIfNotFound);
 /* If you want to echo back HTML into the value="" attribute or display some user output this will help you */
-static char* strdupEscapeForHTML(const char* stringToEscape);
+char* strdupEscapeForHTML(const char* stringToEscape);
 /* If you have a file you reading/writing across connections you can use this provided pthread mutex so you don't have to make your own */
 static int globalMutexLock();
 static int globalMutexUnlock();
 /* Need to inspect a header in a request? */
 static const struct Header* headerInRequest(const char* headerName, const struct Request* request);
 /* Get a debug string representing this connection that's easy to print out. wrap it in HTML <pre> tags */
-static struct HeapString connectionDebugStringCreate(const struct Connection* connection);
+struct HeapString connectionDebugStringCreate(const struct Connection* connection);
 /* Some really basic dynamic string handling. AppendChar and AppendFormat allocate enough memory and
- these strings are null-terminated so you can pass them into sprintf */
+ these strings are null-terminated so you can pass them into sews_printf */
 static void heapStringInit(struct HeapString* string);
 static void heapStringFreeContents(struct HeapString* string);
 static void heapStringSetToCString(struct HeapString* heapString, const char* cString);
@@ -283,10 +315,10 @@ struct Response* createResponseForRequest(const struct Request* request, const s
         struct Response* response = responseAlloc(200, "OK", "text/html; charset=UTF-8", 0);
         
         heapStringAppendString(&response->body, "<html><head><title>HTML Form POST demo | Embedded C Web Server</title></head>\n"
-                               "<body>"
-                               "<a href=\"/\">Home</a><br>\n"
-                               "<h2>HTML Form POST demo</h2>\n"
-                               "Please type a message into the tagbox. Tagboxes were popular on personal websites from the early-2000s. It's like a mini-Twitter for every site.<br>\n");
+            "<body>"
+            "<a href=\"/\">Home</a><br>\n"
+            "<h2>HTML Form POST demo</h2>\n"
+            "Please type a message into the tagbox. Tagboxes were popular on personal websites from the early-2000s. It's like a mini-Twitter for every site.<br>\n");
         char* message = strdupDecodePOSTParam("message=", request, NULL);
         char* name = strdupDecodePOSTParam("name=", request, NULL);
         char* action = strdupDecodePOSTParam("action=", request, NULL);
@@ -426,12 +458,16 @@ struct Response* createResponseForRequest(const struct Request* request, const s
             if (NULL != fp) {
                 time_t t;
                 time(&t);
-                fprintf(fp, "<html><head><title>Index page</title><link rel=\"stylesheet\" href=\"style.css\"></head><body>Welcome to this page which was written at %ld. The background should be purple and the text will be white if the external stylesheet was loaded and served correctly.<br>"
+                struct tm tExploded;
+                localtime_r(&t, &tExploded);
+                char timeString[256];
+                strftime(timeString, sizeof(timeString), "%D %T", &tExploded);
+                fprintf(fp, "<html><head><title>Index page</title><link rel=\"stylesheet\" href=\"style.css\"></head><body>Welcome to this page which was written at %s. The background should be purple and the text will be white if the external stylesheet was loaded and served correctly.<br>"
                         "sizeof(Connection) - the main connection structure is %ld bytes.<br>"
                         "sizeof(Request) - which is inside of the Connection structure is %ld bytes.<br>"
                         "<img src=\"Rotating_earth_(large).gif\">\n"
                         "</body></html>",
-                        (long) t, (long) sizeof(struct Connection), (long) sizeof(struct Request));
+                        timeString, (long) sizeof(struct Connection), (long) sizeof(struct Request));
                 fclose(fp);
             }
             fp = fopen("style.css", "wb");
@@ -456,14 +492,14 @@ struct Response* createResponseForRequest(const struct Request* request, const s
         }
         
         const char* path = request->path;
-        /* skip over . \ / nonsense. */
+        /* skip over . \ / nonsense. This is probably vulnerable to some Unicode assery */
         while (*path == '/' || *path == '.' || *path == '\\') {
             path++;
         }
         if (*path == '\0') {
             path = "index.html";
         }
-        char* pathWithDocumentRoot = (char*) malloc(strlen(path) + strlen(OptionDocumentRoot) + sizeof('/') + sizeof('\0'));
+        char* pathWithDocumentRoot = (char*) malloc(strlen(path) + sizeof('/') + strlen(OptionDocumentRoot) + sizeof('\0'));
         sprintf(pathWithDocumentRoot, "%s/%s", OptionDocumentRoot, path);
         struct Response* response = responseAllocWithFile(pathWithDocumentRoot);
         free(pathWithDocumentRoot);
@@ -508,11 +544,11 @@ static char* strdupIfNotNull(const char* strToDup) {
     return strdup(strToDup);
 }
 
-static char* strdupDecodeGETParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound) {
+char* strdupDecodeGETParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound) {
     return strdupDecodeGETorPOSTParam(paramNameIncludingEquals, request->path, valueIfNotFound);
 }
 
-static char* strdupDecodePOSTParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound) {
+char* strdupDecodePOSTParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound) {
     return strdupDecodeGETorPOSTParam(paramNameIncludingEquals, request->body.contents, valueIfNotFound);
 }
 
@@ -522,7 +558,7 @@ typedef enum {
     URLDecodeStatePercentSecondDigit
 } URLDecodeState;
 
-static char* strdupDecodeGETorPOSTParam(const char* paramNameIncludingEquals, const char* paramString, const char* valueIfNotFound) {
+char* strdupDecodeGETorPOSTParam(const char* paramNameIncludingEquals, const char* paramString, const char* valueIfNotFound) {
     assert(strstr(paramNameIncludingEquals, "=") != NULL && "You have to pass an equals sign after the param name, like 'name='");
     /* The string passed is actually NULL -- this is accepted because it's more convenient */
     if (NULL == paramString) {
@@ -536,7 +572,7 @@ static char* strdupDecodeGETorPOSTParam(const char* paramNameIncludingEquals, co
     /* Ok paramStart points at -->"name=" ; let's make it point at "=" */
     paramStart = strstr(paramStart, "=");
     if (NULL == paramStart) {
-        printf("It's very suspicious that we couldn't find an equals sign after searching for '%s' in '%s'\n", paramStart, paramString);
+        ews_printf("It's very suspicious that we couldn't find an equals sign after searching for '%s' in '%s'\n", paramStart, paramString);
         return strdupIfNotNull(valueIfNotFound);
     }
     /* We need to skip past the "=" */
@@ -584,7 +620,7 @@ static char* strdupDecodeGETorPOSTParam(const char* paramNameIncludingEquals, co
                     decoded[deci] = (char) decodedEscape;
                     deci++;
                 } else {
-                    printf("Warning: Unable to decode hex string 0x%s from %s", hexString, paramStart);
+                    ews_printf("Warning: Unable to decode hex string 0x%s from %s", hexString, paramStart);
                 }
                 state = URLDecodeStateNormal;
             }
@@ -605,7 +641,8 @@ static void heapStringReallocIfNeeded(struct HeapString* string, size_t minimumC
     assert(string->capacity > 0 && "We are about to allocate a string with 0 capacity. We should have checked this condition above");
     bool previouslyAllocated = string->contents != NULL;
     string->contents = (char*) realloc(string->contents, string->capacity);
-    if (OptionIncludeStatusPage) {
+    memset(&string->contents[string->length], 0, string->capacity - string->length);
+    if (OptionIncludeStatusPageAndCounters) {
         pthread_mutex_lock(&counters.lock);
         if (previouslyAllocated) {
             counters.heapStringReallocations++;
@@ -614,9 +651,7 @@ static void heapStringReallocIfNeeded(struct HeapString* string, size_t minimumC
         }
         counters.heapStringTotalBytesReallocated += string->capacity;
         pthread_mutex_unlock(&counters.lock);
-        globalMutexUnlock();
     }
-    memset(&string->contents[string->length], 0, string->capacity - string->length);
 }
 
 static size_t heapStringNextAllocationSize(size_t required) {
@@ -669,23 +704,23 @@ static void heapStringAppendHeapString(struct HeapString* target, const struct H
 static bool heapStringIsSaneCString(const struct HeapString* heapString) {
     if (NULL == heapString->contents) {
         if (heapString->capacity != 0) {
-            printf("The heap string %p has a capacity of %ld but it's contents are NULL\n", heapString, (long) heapString->capacity);
+            ews_printf("The heap string %p has a capacity of %ld but it's contents are NULL\n", heapString, (long) heapString->capacity);
             return false;
         }
         if (heapString->length != 0) {
-            printf("The heap string %p has a length of %ld but capacity is 0 and contents are NULL\n", heapString, (long) heapString->capacity);
+            ews_printf("The heap string %p has a length of %ld but capacity is 0 and contents are NULL\n", heapString, (long) heapString->capacity);
             return false;
         }
         return true;
     }
     if (heapString->capacity <= heapString->length) {
-        printf("Heap string %p has probably overwritten invalid memory because the capacity (%ld) is <= length (%ld), which is a big nono. The capacity must always be 1 more than the length since the contents is null-terminated for convenience.\n",
+        ews_printf("Heap string %p has probably overwritten invalid memory because the capacity (%ld) is <= length (%ld), which is a big nono. The capacity must always be 1 more than the length since the contents is null-terminated for convenience.\n",
                heapString, heapString->capacity, heapString->length);
         return false;
     }
     
     if (strlen(heapString->contents) != heapString->length) {
-        printf("The %p strlen(heap string contents) (%ld) is not equal to heapString length (%ld), which is not correct for a C string. This can be correct if we're sending something like a PNG image which can contain '\\0' characters",
+        ews_printf("The %p strlen(heap string contents) (%ld) is not equal to heapString length (%ld), which is not correct for a C string. This can be correct if we're sending something like a PNG image which can contain '\\0' characters",
                heapString,
                (long) strlen(heapString->contents),
                (long) heapString->length);
@@ -694,7 +729,7 @@ static bool heapStringIsSaneCString(const struct HeapString* heapString) {
     return true;
 }
 
-static char* strdupEscapeForHTML(const char* stringToEscape) {
+char* strdupEscapeForHTML(const char* stringToEscape) {
     struct HeapString escapedString;
     heapStringInit(&escapedString);
     size_t stringToEscapeLength = strlen(stringToEscape);
@@ -763,7 +798,7 @@ static void heapStringFreeContents(struct HeapString* string) {
         string->contents = NULL;
         string->capacity = 0;
         string->length = 0;
-        if (OptionIncludeStatusPage) {
+        if (OptionIncludeStatusPageAndCounters) {
             pthread_mutex_lock(&counters.lock);
             counters.heapStringFrees++;
             pthread_mutex_unlock(&counters.lock);
@@ -772,9 +807,14 @@ static void heapStringFreeContents(struct HeapString* string) {
         assert(string->capacity == 0 && "Why did a string with a NULL contents have a capacity > 0? This is not correct and may indicate corruption");
     }
 }
-static struct HeapString connectionDebugStringCreate(const struct Connection* connection) {
+struct HeapString connectionDebugStringCreate(const struct Connection* connection) {
     struct HeapString debugString = {0};
     heapStringAppendFormat(&debugString, "%s from %s:%s\n", connection->request.method, connection->remoteHost, connection->remotePort);
+    heapStringAppendFormat(&debugString, "Bytes sent:%ld\n", (long) connection->status.bytesSent);
+    heapStringAppendFormat(&debugString, "Bytes received:%ld\n", (long) connection->status.bytesReceived);
+    heapStringAppendFormat(&debugString, "Final request parse state:%d\n", connection->request.state);
+    heapStringAppendFormat(&debugString, "Header pool used:%ld\n", (long) connection->request.headersStringPoolOffset);
+    heapStringAppendFormat(&debugString, "Header count:%ld\n", (long) connection->request.headersCount);
     bool firstHeader = true;
     heapStringAppendString(&debugString, "\n*** Request Headers ***\n");
     for (size_t i = 0; i < connection->request.headersCount; i++) {
@@ -786,6 +826,35 @@ static struct HeapString connectionDebugStringCreate(const struct Connection* co
     }
     if (NULL != connection->request.body.contents) {
         heapStringAppendFormat(&debugString, "\n*** Request Body ***\n%s\n", connection->request.body.contents);
+    }
+    heapStringAppendFormat(&debugString, "\n*** Request Warnings ***\n");
+    bool hadWarnings = false;
+    if (connection->request.warnings.headersStringPoolExhausted) {
+        heapStringAppendString(&debugString, "headersStringPoolExhausted - try upping REQUEST_HEADERS_MAX_MEMORY\n");
+        hadWarnings = true;
+    }
+    if (connection->request.warnings.headersTooManyDropped) {
+        heapStringAppendString(&debugString, "headersTooManyDropped - try upping REQUEST_MAX_HEADERS\n");
+        hadWarnings = true;
+    }
+    if (connection->request.warnings.methodTruncated) {
+        heapStringAppendString(&debugString, "methodTruncated - you can increase the size of method[]\n");
+        hadWarnings = true;
+    }
+    if (connection->request.warnings.pathTruncated) {
+        heapStringAppendString(&debugString, "pathTruncated - you can increase the size of path[]\n");
+        hadWarnings = true;
+    }
+    if (connection->request.warnings.versionTruncated) {
+        heapStringAppendString(&debugString, "versionTruncated - you can increase the size of version[]\n");
+        hadWarnings = true;
+    }
+    if (connection->request.warnings.bodyTruncated) {
+        heapStringAppendString(&debugString, "bodyTruncated - you can increase REQUEST_MAX_BODY_LENGTH");
+        hadWarnings = true;
+    }
+    if (!hadWarnings) {
+        heapStringAppendString(&debugString, "No warnings\n");
     }
     return debugString;
 }
@@ -803,17 +872,19 @@ static void poolStringStartNewString(struct PoolString* poolString, struct Reque
     if (request->headersStringPoolOffset >= REQUEST_HEADERS_MAX_MEMORY - 1) { // -1 is because the last pool string needs to be null-terminated
         poolString->length = 0;
         poolString->contents = NULL;
+        request->warnings.headersStringPoolExhausted = true;
         return;
     }
     /* there's already another string in the pool - we need to skip the null character (the string pool is initialized to 0s by calloc) */
     request->headersStringPoolOffset++;
     poolString->contents = &request->headersStringPool[request->headersStringPoolOffset];
     poolString->length = 0;
+    return;
 }
 
 static void poolStringAppendChar(struct Request* request, struct PoolString* string, char c) {
     if (request->headersStringPoolOffset >= REQUEST_HEADERS_MAX_MEMORY - 1) {
-        printf("Warning: header string pool is exhausted\n"); // TODO: this is going to print a lot when the pool is exhausted
+        request->warnings.headersStringPoolExhausted = true;
         return;
     }
     string->contents[string->length] = c;
@@ -822,7 +893,7 @@ static void poolStringAppendChar(struct Request* request, struct PoolString* str
 }
 
 // allocates a response with content = malloc(contentLength + 1) so you can write null-terminated strings to it
-static struct Response* responseAlloc(int code, const char* status, const char* contentType, size_t bodyCapacity) {
+struct Response* responseAlloc(int code, const char* status, const char* contentType, size_t bodyCapacity) {
     struct Response* response = (struct Response*) calloc(1, sizeof(*response));
     response->code = code;
     heapStringInit(&response->body);
@@ -830,7 +901,7 @@ static struct Response* responseAlloc(int code, const char* status, const char* 
     response->body.length = 0;
     if (response->body.capacity > 0) {
         response->body.contents = (char*) calloc(1, response->body.capacity);
-        if (OptionIncludeStatusPage) {
+        if (OptionIncludeStatusPageAndCounters) {
             pthread_mutex_lock(&counters.lock);
             counters.heapStringAllocations++;
             pthread_mutex_unlock(&counters.lock);
@@ -841,19 +912,18 @@ static struct Response* responseAlloc(int code, const char* status, const char* 
     return response;
 }
 
-static struct Response* responseAllocHTML(const char* html) {
+struct Response* responseAllocHTML(const char* html) {
     return responseAllocHTMLWithStatus(200, "OK", html);
 }
 
-static struct Response* responseAllocHTMLWithStatus(int code, const char* status, const char* html) {
+struct Response* responseAllocHTMLWithStatus(int code, const char* status, const char* html) {
     struct Response* response = responseAlloc(200, "OK", "text/html; charset=UTF-8", 0);
     heapStringSetToCString(&response->body, html);
     return response;
 }
 
-static struct Response* responseAllocWithFormat(int code, const char* status, const char* contentType, const char* format, ...) {
+struct Response* responseAllocWithFormat(int code, const char* status, const char* contentType, const char* format, ...) {
     struct Response* response = responseAlloc(code, status, contentType, 0);
-    // it's less code to just free the response and call vasprintf
     va_list ap;
     va_start(ap, format);
     heapStringAppendFormatV(&response->body, format, ap);
@@ -861,7 +931,7 @@ static struct Response* responseAllocWithFormat(int code, const char* status, co
     return response;
 }
 
-static struct Response* responseAlloc404NotFoundHTML(const char* resourcePathOrNull) {
+struct Response* responseAlloc404NotFoundHTML(const char* resourcePathOrNull) {
     if (NULL == resourcePathOrNull) {
         return responseAllocHTMLWithStatus(404, "Not Found", "<html><head><title>404 Not Found</title></head><body>The resource you specified could not be found</body></html>");
     } else {
@@ -869,7 +939,7 @@ static struct Response* responseAlloc404NotFoundHTML(const char* resourcePathOrN
     }
 }
 
-static struct Response* responseAlloc500InternalErrorHTML(const char* extraInformationOrNull) {
+struct Response* responseAlloc500InternalErrorHTML(const char* extraInformationOrNull) {
     if (NULL == extraInformationOrNull) {
         return responseAllocHTMLWithStatus(500, "Internal Error", "<html><head><title>500 Internal Error</title></head><body>There was an internal error while completing your request</body></html>");
     } else {
@@ -878,7 +948,7 @@ static struct Response* responseAlloc500InternalErrorHTML(const char* extraInfor
     
 }
 
-static struct Response* responseAllocWithFile(const char* filename) {
+struct Response* responseAllocWithFile(const char* filename) {
     struct Response* response = responseAlloc(200, "OK", NULL, 0);
     response->filenameToSend = strdup(filename);
     return response;
@@ -906,7 +976,7 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                     request->method[request->methodLength] = c;
                     request->methodLength++;
                 } else {
-                    printf("Warning: request method %s is too long...\n", request->method);
+                    request->warnings.methodTruncated = true;
                 }
                 break;
             case RequestParseStatePath:
@@ -916,7 +986,7 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                     request->path[request->pathLength] = c;
                     request->pathLength++;
                 } else {
-                    printf("Warning: request path %s is too long...\n", request->path);
+                    request->warnings.pathTruncated = true;
                 }
                 break;
             case RequestParseStateVersion:
@@ -926,7 +996,7 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                     request->version[request->versionLength] = c;
                     request->versionLength++;
                 } else {
-                    printf("Warning: request version %s is too long...\n", request->version);
+                    request->warnings.versionTruncated = true;
                 }
                 break;
             case RequestParseStateHeaderName:
@@ -942,6 +1012,8 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                         }
                         /* store the header name in the string pool */
                         poolStringAppendChar(request, &request->headers[request->headersCount].name, c);
+                    } else {
+                        request->warnings.headersTooManyDropped = true;
                     }
                 }
                 break;
@@ -988,7 +1060,7 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                     request->state = RequestParseStateDone;
                     const struct Header* contentLengthHeader = headerInRequest("Content-Length", request);
                     if (NULL != contentLengthHeader) {
-                        printf("Incoming request has a body of length %s\n", contentLengthHeader->value.contents);
+                        ews_printf_debug("Incoming request has a body of length %s\n", contentLengthHeader->value.contents);
                         long contentLength = 0;
                         if (1 == sscanf(contentLengthHeader->value.contents, "%ld", &contentLength)) {
                             request->body.contents = (char*) calloc(1, contentLength + 1);
@@ -1011,11 +1083,34 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                 }
                 break;
             case RequestParseStateDone:
+                if (NULL != request->body.contents) {
+                    request->warnings.bodyTruncated = true;
+                }
                 break;
         }
     }
 }
 
+static void requestPrintWarnings(const struct Request* request, const char* remoteHost, const char* remotePort) {
+    if (request->warnings.headersStringPoolExhausted) {
+        ews_printf("Warning: Request from %s:%s exhausted the header string pool so some information will be lost. You can try increasing REQUEST_HEADERS_MAX_MEMORY which is currently %ld bytes\n", remoteHost, remotePort, (long) REQUEST_HEADERS_MAX_MEMORY);
+    }
+    if (request->warnings.headersTooManyDropped) {
+        ews_printf("Warning: Request from %s:%s had too many headers and we dropped some. You can try increasing REQUEST_MAX_HEADERS which is currently %ld\n", remoteHost, remotePort, (long) REQUEST_MAX_HEADERS);
+    }
+    if (request->warnings.methodTruncated) {
+        ews_printf("Warning: Request from %s:%s method was truncated to %s\n", remoteHost, remotePort, request->method);
+    }
+    if (request->warnings.pathTruncated) {
+        ews_printf("Warning: Request from %s:%s path was truncated to %s\n", remoteHost, remotePort, request->path);
+    }
+    if (request->warnings.versionTruncated) {
+        ews_printf("Warning: Request from %s:%s version was truncated to %s\n", remoteHost, remotePort, request->version);
+    }
+    if (request->warnings.bodyTruncated) {
+        ews_printf("Warning: Request from %s:%s body was truncated to %ld bytes\n", remoteHost, remotePort, (long) request->body.length);
+    }
+}
 
 static struct Connection* connectionAlloc() {
     struct Connection* connection = (struct Connection*) calloc(1, sizeof(*connection)); // calloc 0's everything which requestParse depends on
@@ -1028,7 +1123,12 @@ static void connectionFree(struct Connection* connection) {
     heapStringFreeContents(&connection->request.body);
     free(connection);
 }
-static int acceptConnectionsForeverFromEverywhereIPv4(uint16_t portInHostOrder) {
+
+static void SIGPIPEHandler(int signal) {
+    /* do nothing */
+}
+
+int acceptConnectionsForeverFromEverywhereIPv4(uint16_t portInHostOrder) {
     /* In order to keep the code really short I've just assumed
      we want to bind to 0.0.0.0, which is all available interfaces.
      What you actually want to do is call getaddrinfo on command line arguments
@@ -1040,7 +1140,7 @@ static int acceptConnectionsForeverFromEverywhereIPv4(uint16_t portInHostOrder) 
     return acceptConnectionsForever((struct sockaddr*) &anyInterfaceIPv4, sizeof(anyInterfaceIPv4));
 }
 
-static int acceptConnectionsForever(const struct sockaddr* address, socklen_t addressLength) {
+int acceptConnectionsForever(const struct sockaddr* address, socklen_t addressLength) {
     char addressHost[256];
     char addressPort[20];
     int nameResult = getnameinfo(address, addressLength, addressHost, sizeof(addressHost), addressPort, sizeof(addressPort), NI_NUMERICHOST | NI_NUMERICSERV);
@@ -1048,10 +1148,13 @@ static int acceptConnectionsForever(const struct sockaddr* address, socklen_t ad
         strcpy(addressHost, "Unknown");
         strcpy(addressPort, "Unknown");
     }
-    
+    void* previousSIGPIPEHandler =signal(SIGPIPE, &SIGPIPEHandler);
+    if (NULL != previousSIGPIPEHandler) {
+        ews_printf("Warning: Uninstalled previous SIGPIPE handler:%p and installed our handler which ignores SIGPIPE\n", previousSIGPIPEHandler);
+    }
     int listenerfd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listenerfd <= 0) {
-        printf("Could not create listener socket: %s = %d\n", strerror(errno), errno);
+        ews_printf("Could not create listener socket: %s = %d\n", strerror(errno), errno);
         return 1;
     }
     /* SO_REUSEADDR tells the kernel to re-use the bind address in certain circumstances.
@@ -1060,18 +1163,18 @@ static int acceptConnectionsForever(const struct sockaddr* address, socklen_t ad
     int reuse = 1;
     result = setsockopt(listenerfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
     if (0 != result) {
-        printf("Failed to setsockopt SE_REUSEADDR = true with %s = %d. Continuing because we might still succeed...\n", strerror(errno), errno);
+        ews_printf("Failed to setsockopt SE_REUSEADDR = true with %s = %d. Continuing because we might still succeed...\n", strerror(errno), errno);
     }
     
     result = bind(listenerfd, address, addressLength);
     if (0 != result) {
-        printf("Could not bind to %s:%s %s = %d\n", addressHost, addressPort, strerror(errno), errno);
+        ews_printf("Could not bind to %s:%s %s = %d\n", addressHost, addressPort, strerror(errno), errno);
         return 1;
     }
     /* listen for the maximum possible amount of connections */
     result = listen(listenerfd, SOMAXCONN);
     if (0 != result) {
-        printf("Could not listen for SOMAXCONN (%d) connections. %s = %d. Continuing because we might still succeed...\n", SOMAXCONN, strerror(errno), errno);
+        ews_printf("Could not listen for SOMAXCONN (%d) connections. %s = %d. Continuing because we might still succeed...\n", SOMAXCONN, strerror(errno), errno);
     }
     /* print out the addresses we're listening on. Special-case IPv4 0.0.0.0 bind-to-all-interfaces */
     bool printed = false;
@@ -1083,21 +1186,31 @@ static int acceptConnectionsForever(const struct sockaddr* address, socklen_t ad
         }
     }
     if (!printed) {
-        printf("Listening for connections on %s:%s\n", addressHost, addressPort);
+        ews_printf("Listening for connections on %s:%s\n", addressHost, addressPort);
     }
     pthread_mutex_init(&counters.lock, NULL);
     pthread_mutex_init(&server.globalMutex, NULL);
+    server.shouldRun = true;
     /* allocate a connection (which sets connection->remoteAddrLength) and accept the next inbound connection */
     struct Connection* nextConnection = connectionAlloc();
-    while (-1 != (nextConnection->socketfd = accept(listenerfd, (struct sockaddr*) &nextConnection->remoteAddr, &nextConnection->remoteAddrLength))) {
+    while (-1 != (nextConnection->socketfd = accept(listenerfd, (struct sockaddr*) &nextConnection->remoteAddr, &nextConnection->remoteAddrLength)) && server.shouldRun) {
         pthread_t connectionThread;
         /* we just received a new connection, spawn a thread */
-        pthread_create(&connectionThread, NULL, &connectionHandlerThread, nextConnection);
+        result = pthread_create(&connectionThread, NULL, &connectionHandlerThread, nextConnection);
+        if (0 != result) {
+            ews_printf("Error while creating thread after accepting new connection! pthread_create returned %d Continuing...\n", result);
+        }
+        result = pthread_detach(connectionThread);
+        if (0 != result) {
+            printf("Error while calling pthread_detach. Oh well - continuing with probably leaked memory. pthread_detached returned %d\n", result);
+        }
         nextConnection = connectionAlloc();
     }
+    close(listenerfd);
+    connectionFree(nextConnection);
     pthread_mutex_destroy(&counters.lock);
     pthread_mutex_destroy(&server.globalMutex);
-    printf("exiting because accept failed (probably interrupted) %s = %d\n", strerror(errno), errno);
+    ews_printf("exiting because accept failed (probably interrupted) %s = %d\n", strerror(errno), errno);
     return 0;
 }
 
@@ -1108,6 +1221,7 @@ static int sendResponseBody(struct Connection* connection, const struct Response
                                    "HTTP/1.0 %d %s\r\n"
                                    "Content-Type: %s\r\n"
                                    "Content-Length: %ld\r\n"
+                                   "Server: Embeddable Web Server/" EMBEDDABLE_WEB_SERVER_VERSION_STRING "\r\n"
                                    "\r\n",
                                    response->code,
                                    response->status,
@@ -1116,7 +1230,7 @@ static int sendResponseBody(struct Connection* connection, const struct Response
     ssize_t sendResult;
     sendResult = send(connection->socketfd, connection->responseHeader, headerLength, 0);
     if (sendResult != headerLength) {
-        printf("Failed to respond to %s:%s because we could not send the HTTP response *header*. send returned %ld with %s = %d\n",
+        ews_printf("Failed to respond to %s:%s because we could not send the HTTP response *header*. send returned %ld with %s = %d\n",
                connection->remoteHost,
                connection->remotePort,
                (long) sendResult,
@@ -1128,7 +1242,7 @@ static int sendResponseBody(struct Connection* connection, const struct Response
     if (response->body.length > 0) {
         sendResult = send(connection->socketfd, response->body.contents, response->body.length, 0);
         if (sendResult != response->body.length) {
-            printf("Failed to response to %s:%s because we could not send the HTTP response *body*. send returned %ld with %s = %d\n",
+            ews_printf("Failed to respond to %s:%s because we could not send the HTTP response *body*. send returned %ld with %s = %d\n",
                    connection->remoteHost,
                    connection->remotePort,
                    (long) sendResult,
@@ -1155,14 +1269,14 @@ static int sendResponseFile(struct Connection* connection, const struct Response
     const char* contentType = NULL;
     const size_t MIMEReadSize = 100;
     if (NULL == fp) {
-        printf("Unable to satisfy request for '%s' because we could not open the file '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+        ews_printf("Unable to satisfy request for '%s' because we could not open the file '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
         errorResponse = responseAlloc404NotFoundHTML(connection->request.path);
         goto exit;
     }
     assert(sizeof(connection->sendRecvBuffer) >= MIMEReadSize);
     actualMIMEReadSize = fread(connection->sendRecvBuffer, 1, MIMEReadSize, fp);
     if (-1 == actualMIMEReadSize) {
-        printf("Unable to satisfy request for '%s' because we could read the first bunch of bytes to determine MIME type '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+        ews_printf("Unable to satisfy request for '%s' because we could read the first bunch of bytes to determine MIME type '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
         errorResponse = responseAlloc500InternalErrorHTML("fread for MIME type detection failed");
         goto exit;
     }
@@ -1170,19 +1284,19 @@ static int sendResponseFile(struct Connection* connection, const struct Response
     /* get the file length, laboriously checking for errors */
     result = fseek(fp, 0, SEEK_END);
     if (0 != result) {
-        printf("Unable to satisfy request for '%s' because we could not fseek to the end of the file '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+        ews_printf("Unable to satisfy request for '%s' because we could not fseek to the end of the file '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
         errorResponse = responseAlloc500InternalErrorHTML("fseek to end of file failed");
         goto exit;
     }
     fileLength = ftell(fp);
     if (fileLength < 0) {
-        printf("Unable to satisfy request for '%s' because we could not ftell on the file '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+        ews_printf("Unable to satisfy request for '%s' because we could not ftell on the file '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
         errorResponse = responseAlloc500InternalErrorHTML("ftell to determine file length failed");
         goto exit;
     }
     result = fseek(fp, 0, SEEK_SET);
     if (0 != result) {
-        printf("Unable to satisfy request for '%s' because we could not fseek to the beginning of the file '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+        ews_printf("Unable to satisfy request for '%s' because we could not fseek to the beginning of the file '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
         errorResponse = responseAlloc500InternalErrorHTML("fseek to beginning of file to start sending failed");
         goto exit;
     }
@@ -1193,6 +1307,7 @@ static int sendResponseFile(struct Connection* connection, const struct Response
                             "HTTP/1.0 %d %s\r\n"
                             "Content-Type: %s\r\n"
                             "Content-Length: %ld\r\n"
+                            "Server: Embeddable Web Server/" EMBEDDABLE_WEB_SERVER_VERSION_STRING "\r\n"
                             "\r\n",
                             response->code,
                             response->status,
@@ -1200,9 +1315,9 @@ static int sendResponseFile(struct Connection* connection, const struct Response
                             fileLength);
     sendResult = send(connection->socketfd, connection->responseHeader, headerLength, 0);
     if (sendResult != headerLength) {
-        printf("Unable to satisfy request for '%s' because we could not send the HTTP header '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
-        fclose(fp);
-        return 1;
+        ews_printf("Unable to satisfy request for '%s' because we could not send the HTTP header '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+        result = 1;
+        goto exit;
     }
     *bytesSent = sendResult;
     /* read the whole file, just buffering into the connection buffer, and sending it out to the socket */
@@ -1212,14 +1327,14 @@ static int sendResponseFile(struct Connection* connection, const struct Response
             break;
         }
         if (-1 == bytesRead) {
-            printf("Unable to satisfy request for '%s' because there was an error freading. '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+            ews_printf("Unable to satisfy request for '%s' because there was an error freading. '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
             errorResponse = responseAlloc500InternalErrorHTML("Could not fread to send over socket");
             goto exit;
         }
         /* send the data out the socket to the network */
         sendResult = send(connection->socketfd, connection->sendRecvBuffer, bytesRead, 0);
         if (sendResult != bytesRead) {
-            printf("Unable to satisfy request for '%s' because there was an error sending bytes. '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+            ews_printf("Unable to satisfy request for '%s' because there was an error sending bytes. '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
             result = 1;
             goto exit;
         }
@@ -1245,8 +1360,8 @@ static int sendResponse(struct Connection* connection, const struct Response* re
     if (NULL != response->filenameToSend) {
         return sendResponseFile(connection, response, bytesSent);
     }
-    printf("Error: the request for '%s' failed because there was neither a response body nor a filenameToSend\n", response->filenameToSend);
-    assert(0 && "See above printf");
+    ews_printf("Error: the request for '%s' failed because there was neither a response body nor a filenameToSend\n", connection->request.path);
+    assert(0 && "See above ews_printf");
     return 1;
 }
 
@@ -1255,11 +1370,13 @@ static void* connectionHandlerThread(void* connectionPointer) {
     getnameinfo((struct sockaddr*) &connection->remoteAddr, connection->remoteAddrLength,
                 connection->remoteHost, sizeof(connection->remoteHost),
                 connection->remotePort, sizeof(connection->remotePort), NI_NUMERICHOST | NI_NUMERICSERV);
-    printf("New connection from %s:%s...\n", connection->remoteHost, connection->remotePort);
-    pthread_mutex_lock(&counters.lock);
-    counters.activeConnections++;
-    counters.totalConnections++;
-    pthread_mutex_unlock(&counters.lock);
+    ews_printf_debug("New connection from %s:%s...\n", connection->remoteHost, connection->remotePort);
+    if (OptionIncludeStatusPageAndCounters) {
+        pthread_mutex_lock(&counters.lock);
+        counters.activeConnections++;
+        counters.totalConnections++;
+        pthread_mutex_unlock(&counters.lock);
+    }
     /* first read the request + request body */
     bool madeRequestPrintf = false;
     bool foundRequest = false;
@@ -1268,12 +1385,10 @@ static void* connectionHandlerThread(void* connectionPointer) {
         if (OptionPrintWholeRequest) {
             fwrite(connection->sendRecvBuffer, 1, bytesRead, stdout);
         }
-        pthread_mutex_lock(&counters.lock);
-        counters.bytesReceived += bytesRead;
-        pthread_mutex_unlock(&counters.lock);
+        connection->status.bytesReceived += bytesRead;
         requestParse(&connection->request, connection->sendRecvBuffer, bytesRead);
         if (connection->request.state >= RequestParseStateVersion && !madeRequestPrintf) {
-            printf("Request from %s:%s: %s to %s version %s\n",
+            ews_printf_debug("Request from %s:%s: %s to %s HTTP version %s\n",
                    connection->remoteHost,
                    connection->remotePort,
                    connection->request.method,
@@ -1286,30 +1401,33 @@ static void* connectionHandlerThread(void* connectionPointer) {
             break;
         }
     }
+    requestPrintWarnings(&connection->request, connection->remoteHost, connection->remotePort);
     ssize_t bytesSent = 0;
     if (foundRequest) {
         struct Response* response = createResponseForRequest(&connection->request, connection);
         if (NULL != response) {
             int result = sendResponse(connection, response, &bytesSent);
             if (0 == result) {
-                printf("Sent response length %ld to %s:%s\n", bytesSent, connection->remoteHost, connection->remotePort);
+                ews_printf_debug("%s:%s: Sent response length %ld\n", connection->remoteHost, connection->remotePort, (long)bytesSent);
             } else {
-                /* sendResponse already printed something out, don't add another printf */
+                /* sendResponse already printed something out, don't add another ews_printf */
             }
             responseFree(response);
+            connection->status.bytesSent = bytesSent;
         } else {
-            printf("You have returned a NULL response - I'm assuming you took over the request handling yourself.\n");
+            ews_printf("%s:%s: You have returned a NULL response - I'm assuming you took over the request handling yourself.\n", connection->remoteHost, connection->remotePort);
         }
     } else {
-        printf("No request found from %s:%s? Bailing...\n", connection->remoteHost, connection->remotePort);
+        ews_printf("No request found from %s:%s? Bailing...\n", connection->remoteHost, connection->remotePort);
     }
     /* Alright - we're done */
+    close(connection->socketfd);
     pthread_mutex_lock(&counters.lock);
-    counters.bytesSent += (long) bytesSent;
+    counters.bytesSent += (long) connection->status.bytesSent;
+    counters.bytesReceived += (long) connection->status.bytesReceived;
     counters.activeConnections--;
     pthread_mutex_unlock(&counters.lock);
-    printf("Connection from %s:%s closed\n", connection->remoteHost, connection->remotePort);
-    close(connection->socketfd);
+    ews_printf_debug("Connection from %s:%s closed\n", connection->remoteHost, connection->remotePort);
     connectionFree(connection);
     return NULL;
 }
@@ -1321,8 +1439,8 @@ static void printIPv4Addresses(uint16_t portInHostOrder) {
     while (NULL != p) {
         if (p->ifa_addr->sa_family == AF_INET) {
             char hostname[256];
-            getnameinfo(p->ifa_addr, p->ifa_addr->sa_len, hostname, sizeof(hostname), NULL, 0, NI_NUMERICHOST);
-            printf("Probably listening on http://%s:%u\n", hostname, portInHostOrder);
+            getnameinfo(p->ifa_addr, sizeof(struct sockaddr_in), hostname, sizeof(hostname), NULL, 0, NI_NUMERICHOST);
+            ews_printf("Probably listening on http://%s:%u\n", hostname, portInHostOrder);
         }
         p = p->ifa_next;
     }
@@ -1407,8 +1525,11 @@ static bool strEndsWith(const char* big, const char* endsWith) {
     return true;
 }
 
+/* Quickie unit tests */
+
 static void testHeapString() {
     struct HeapString easy;
+    heapStringInit(&easy);
     heapStringSetToCString(&easy, "Part1");
     assert(heapStringIsSaneCString(&easy));
     heapStringAppendString(&easy, " Part2");
@@ -1426,7 +1547,7 @@ static void testHeapString() {
     heapStringAppendChar(&easy, '4');
     assert(heapStringIsSaneCString(&easy));
     assert(0 == strcmp(easy.contents, "Part1 Part2 And this is Part3 Part4"));
-    printf("The test heap string is '%s' with an allocated capacity of %ld\n", easy.contents, (long) easy.capacity);
+    ews_printf("The test heap string is '%s' with an allocated capacity of %ld\n", easy.contents, (long) easy.capacity);
     heapStringFreeContents(&easy);
     struct HeapString testFormat;
     heapStringInit(&testFormat);
@@ -1441,6 +1562,7 @@ static void testHeapString() {
     assert(0 == strcmp("X", testAppend.contents));
     heapStringFreeContents(&testAppend);
     struct HeapString testSet;
+    heapStringInit(&testSet);
     heapStringSetToCString(&testSet, "This is a C string");
     assert(heapStringIsSaneCString(&testSet));
     assert(0 == strcmp("This is a C string", testSet.contents));
@@ -1478,9 +1600,97 @@ static void teststrdupEscape() {
     assert(0 == strcmpAndFreeFirstArg( strdupDecodeGETorPOSTParam("param=", "param=value%0a&next", NULL), "value\n"));
 }
 
+static const uint16_t EWSTestPortInHostOrder = 8080;
+static void testSendRequest(const char* requestContents, size_t requestContentsLength);
+static void testSendRequestString(const char* requestString) {
+    testSendRequest(requestString, strlen(requestString));
+}
+
+static void testSendRequest(const char* requestContents, size_t requestContentsLength) {
+    int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    struct sockaddr_in loopback = {0};
+    loopback.sin_family = AF_INET;
+    loopback.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    loopback.sin_port = htons(EWSTestPortInHostOrder);
+    int result;
+    result = connect(fd, (struct sockaddr*) &loopback, sizeof(loopback));
+    assert(0 == result && "connect failed during unit tests");
+    ssize_t bytesSent = send(fd, requestContents, requestContentsLength, 0);
+    assert(bytesSent == requestContentsLength && "could not send request properly during unit tests");
+    close(fd);
+}
+
+static void* acceptUnitTestThread(void* unused) {
+    acceptConnectionsForeverFromEverywhereIPv4(EWSTestPortInHostOrder);
+    return NULL;
+}
+static void triggerSigPipe() {
+    int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    static const char bytes[] = {0, 0, 0, 0};
+    send(fd, bytes, sizeof(bytes), 0);
+    char recvBuffer[1024];
+    recv(fd, recvBuffer, sizeof(recvBuffer), 0);
+    close(fd);
+}
 static void testsRun() {
     testHeapString();
     teststrdupHTMLEscape();
     teststrdupEscape();
+    server.shouldRun = false;
+    pthread_t acceptor;
+    pthread_create(&acceptor, NULL, &acceptUnitTestThread, NULL);
+    pthread_detach(acceptor);
+    while (!server.shouldRun) {
+        usleep(10 * 1000);
+    }
+    printf("Detected test server started...Sending test requests...\n\n");
+    /* See if we can crash the server easily*/
+    if (1 /* TMPD */) {
+        testSendRequest("What", 4);
+        testSendRequest("", 1);
+        testSendRequest("POST ", 4);
+        testSendRequestString(" ");
+        testSendRequestString("  ");
+        testSendRequestString("   ");
+        testSendRequestString("   \r\n");
+        testSendRequestString("   \r\n\r\n");
+        testSendRequestString(" ");
+        testSendRequestString("  ");
+        testSendRequestString("   ");
+        testSendRequestString("   ");
+        testSendRequestString("GET / HTTP/1.0");
+        testSendRequestString("GET / HTTP/1.0\r");
+        testSendRequestString("GET / HTTP/1.0\r\n");
+        testSendRequestString("GET / HTTP/1.0\r\n\r\n");
+        const size_t headersLength = REQUEST_HEADERS_MAX_MEMORY * 2;
+        const char* requestStarter = "GET / HTTP/1.0\r\n";
+        char* headers = calloc(1, strlen(requestStarter) + headersLength + 1);
+        char tmp[12422];
+        int counter =0;
+        strcpy(headers, requestStarter);
+        while (strlen(headers) < headersLength - 12422) {
+            sprintf(tmp, "Fake-Header-0x%08x-big-time: Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!!\r\n", counter);
+            counter++;
+            strcat(headers, tmp);
+        }
+        testSendRequestString(headers);
+        testSendRequestString("GET / HTTP/1.0\r\n\r\n");
+        
+        usleep(1000 * 1000 * 10);
+        printf("Sent requests...\n");
+        server.shouldRun = false;
+        // trigger a memory barrier
+        globalMutexLock();
+        globalMutexUnlock();
+        triggerSigPipe();
+    }
     memset(&counters, 0, sizeof(counters)); // reset counters from tests
 }
+
+/* Concrete tasks:
+-harden request parsing
+-polish demo app
+-do an EWS_IMPLEMENTATION
+-figure out project name
+-polish macros
+-produce readme & guide */
