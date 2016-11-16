@@ -465,7 +465,6 @@ struct Response* createResponseForRequest(const struct Request* request, const s
                 fprintf(fp, "<html><head><title>Index page</title><link rel=\"stylesheet\" href=\"style.css\"></head><body>Welcome to this page which was written at %s. The background should be purple and the text will be white if the external stylesheet was loaded and served correctly.<br>"
                         "sizeof(Connection) - the main connection structure is %ld bytes.<br>"
                         "sizeof(Request) - which is inside of the Connection structure is %ld bytes.<br>"
-                        "<img src=\"Rotating_earth_(large).gif\">\n"
                         "</body></html>",
                         timeString, (long) sizeof(struct Connection), (long) sizeof(struct Request));
                 fclose(fp);
@@ -475,19 +474,6 @@ struct Response* createResponseForRequest(const struct Request* request, const s
                 fprintf(fp, "body {\n\tbackground-color: purple;\n\tcolor:white;\n}");
                 fclose(fp);
             }
-            /* this page rules! http://www.matthewflickinger.com/lab/whatsinagif/bits_and_bytes.asp */
-            static const uint8_t GIFHeader[] = {'G', 'I', 'F', '8', '9', 'a'};
-            const uint16_t canvasWidth = 200;
-            const uint16_t canvasHeight = 200;
-            const uint8_t logicalScreenDescriptor[] =
-            {canvasWidth & 0xff, canvasWidth >> 8, canvasHeight & 0xff, canvasHeight >> 8, 0x91, 0, 0};
-            const uint8_t colorTable[] = {
-                0xff, 0xff, 0xff, // white
-                0x00, 0x00, 0x00, // black
-                0x77, 0x77, 0x77, // gray
-                0x00, 0xaa, 0x00, // green
-            };
-            const uint8_t imageDescriptor[] = {0x2c, 0, 0, 0, 0, canvasWidth & 0xff, canvasWidth >> 8, canvasHeight & 0xff, canvasHeight >> 8};
             filesWritten = true;
         }
         
@@ -1604,49 +1590,15 @@ static void teststrdupEscape() {
     assert(0 == strcmpAndFreeFirstArg( strdupDecodeGETorPOSTParam("param=", "param=val%20ue", NULL), "val ue"));
     assert(0 == strcmpAndFreeFirstArg( strdupDecodeGETorPOSTParam("param=", "param=value%0a&next", NULL), "value\n"));
 }
-
-static const uint16_t EWSTestPortInHostOrder = 8080;
-static void testSendRequest(const char* requestContents, size_t requestContentsLength);
-static void testSendRequestString(const char* requestString) {
-    testSendRequest(requestString, strlen(requestString));
-}
-
-static void testSendRequest(const char* requestContents, size_t requestContentsLength) {
-    int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    struct sockaddr_in loopback = {0};
-    loopback.sin_family = AF_INET;
-    loopback.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    loopback.sin_port = htons(EWSTestPortInHostOrder);
-    int result;
-    result = connect(fd, (struct sockaddr*) &loopback, sizeof(loopback));
-    assert(0 == result && "connect failed during unit tests");
-    ssize_t bytesSent = send(fd, requestContents, requestContentsLength, 0);
-    assert(bytesSent == requestContentsLength && "could not send request properly during unit tests");
-    close(fd);
-}
-
-static void* acceptUnitTestThread(void* unused) {
-    acceptConnectionsForeverFromEverywhereIPv4(EWSTestPortInHostOrder);
-    return NULL;
-}
-static void triggerSigPipe() {
-    int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    static const char bytes[] = {0, 0, 0, 0};
-    send(fd, bytes, sizeof(bytes), 0);
-    char recvBuffer[1024];
-    recv(fd, recvBuffer, sizeof(recvBuffer), 0);
-    close(fd);
-}
 static void testsRun() {
     testHeapString();
     teststrdupHTMLEscape();
     teststrdupEscape();
-    server.shouldRun = false;
-    memset(&counters, 0, sizeof(counters)); // reset counters from tests
+    /* reset counters from tests */
+    memset(&counters, 0, sizeof(counters));
 }
 
 /* Concrete tasks:
--harden request parsing
 -polish demo app
 -do an EWS_IMPLEMENTATION
 -figure out project name
