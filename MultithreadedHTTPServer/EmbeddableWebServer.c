@@ -883,7 +883,7 @@ static void poolStringStartNewString(struct PoolString* poolString, struct Reque
 }
 
 static void poolStringAppendChar(struct Request* request, struct PoolString* string, char c) {
-    if (request->headersStringPoolOffset >= REQUEST_HEADERS_MAX_MEMORY - 1) {
+    if (request->headersStringPoolOffset >= REQUEST_HEADERS_MAX_MEMORY - 1 - sizeof('\0')) { // we need to store one character (-1) and a null character at the end of the last string sizeof('\0')
         request->warnings.headersStringPoolExhausted = true;
         return;
     }
@@ -1023,7 +1023,10 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                     continue;
                 } else if (c == '\r') {
                     if (request->headersCount < REQUEST_MAX_HEADERS) {
-                        request->headersCount++;
+                        /* only go to the next header if we were able to fill this one out */
+                        if (request->headers[request->headersCount].value.length > 0) {
+                            request->headersCount++;
+                        }
                     }
                     request->state = RequestParseStateCR;
                 } else {
@@ -1036,7 +1039,6 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                         poolStringAppendChar(request, &request->headers[request->headersCount].value, c);
                     }
                 }
-                break;
                 break;
             case RequestParseStateCR:
                 if (c == '\n') {
@@ -1063,6 +1065,9 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                         ews_printf_debug("Incoming request has a body of length %s\n", contentLengthHeader->value.contents);
                         long contentLength = 0;
                         if (1 == sscanf(contentLengthHeader->value.contents, "%ld", &contentLength)) {
+                            if (contentLength > REQUEST_MAX_BODY_LENGTH) {
+                                contentLength = REQUEST_MAX_BODY_LENGTH;
+                            }
                             request->body.contents = (char*) calloc(1, contentLength + 1);
                             request->body.capacity = contentLength;
                             request->body.length = 0;
@@ -1637,53 +1642,6 @@ static void testsRun() {
     teststrdupHTMLEscape();
     teststrdupEscape();
     server.shouldRun = false;
-    pthread_t acceptor;
-    pthread_create(&acceptor, NULL, &acceptUnitTestThread, NULL);
-    pthread_detach(acceptor);
-    while (!server.shouldRun) {
-        usleep(10 * 1000);
-    }
-    printf("Detected test server started...Sending test requests...\n\n");
-    /* See if we can crash the server easily*/
-    if (1 /* TMPD */) {
-        testSendRequest("What", 4);
-        testSendRequest("", 1);
-        testSendRequest("POST ", 4);
-        testSendRequestString(" ");
-        testSendRequestString("  ");
-        testSendRequestString("   ");
-        testSendRequestString("   \r\n");
-        testSendRequestString("   \r\n\r\n");
-        testSendRequestString(" ");
-        testSendRequestString("  ");
-        testSendRequestString("   ");
-        testSendRequestString("   ");
-        testSendRequestString("GET / HTTP/1.0");
-        testSendRequestString("GET / HTTP/1.0\r");
-        testSendRequestString("GET / HTTP/1.0\r\n");
-        testSendRequestString("GET / HTTP/1.0\r\n\r\n");
-        const size_t headersLength = REQUEST_HEADERS_MAX_MEMORY * 2;
-        const char* requestStarter = "GET / HTTP/1.0\r\n";
-        char* headers = calloc(1, strlen(requestStarter) + headersLength + 1);
-        char tmp[12422];
-        int counter =0;
-        strcpy(headers, requestStarter);
-        while (strlen(headers) < headersLength - 12422) {
-            sprintf(tmp, "Fake-Header-0x%08x-big-time: Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!! Big time fake value. You wouldn't believe it!!!!!!!!!!!!!!!!!!\r\n", counter);
-            counter++;
-            strcat(headers, tmp);
-        }
-        testSendRequestString(headers);
-        testSendRequestString("GET / HTTP/1.0\r\n\r\n");
-        
-        usleep(1000 * 1000 * 10);
-        printf("Sent requests...\n");
-        server.shouldRun = false;
-        // trigger a memory barrier
-        globalMutexLock();
-        globalMutexUnlock();
-        triggerSigPipe();
-    }
     memset(&counters, 0, sizeof(counters)); // reset counters from tests
 }
 
