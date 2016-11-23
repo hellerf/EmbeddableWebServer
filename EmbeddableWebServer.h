@@ -245,6 +245,10 @@ struct Server {
 #define __printflike(...) // clang (and maybe GCC) has this macro that can check printf/scanf format arguments
 #endif
 
+
+/* You fill in this function. Look at request->path for the requested URI */
+struct Response* createResponseForRequest(const struct Request* request, struct Connection* connection);
+
 /* To embed just call one of these functions. They will accept connections until you call serverStop on the server.
  You can also just pass NULL for server if you just want the server to run forever */
 int acceptConnectionsUntilStoppedFromEverywhereIPv4(struct Server* serverOrNULL, uint16_t portInHostOrder);
@@ -279,7 +283,7 @@ char* strdupDecodeGETParam(const char* paramNameIncludingEquals, const struct Re
 char* strdupDecodePOSTParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound);
 /* You can pass this the request->path for GET or request->body.contents for POST. Accepts NULL for paramString for convenience */
 char* strdupDecodeGETorPOSTParam(const char* paramNameIncludingEquals, const char* paramString, const char* valueIfNotFound);
-/* If you want to echo back HTML into the value="" attribute or display some user output this will help you */
+/* If you want to echo back HTML into the value="" attribute or display some user output this will help you (like &gt; &lt;) */
 char* strdupEscapeForHTML(const char* stringToEscape);
 /* If you have a file you reading/writing across connections you can use this provided pthread mutex so you don't have to make your own */
 /* Need to inspect a header in a request? */
@@ -302,9 +306,6 @@ static const char* MIMETypeFromFile(const char* filename, const uint8_t* content
 /* These are handy if you need to do something like serialize access to a file */
 int serverMutexLock(struct Server* server);
 int serverMutexUnlock(struct Server* server);
-
-/* You fill in this function. Look at request->path for the requested URI */
-struct Response* createResponseForRequest(const struct Request* request, struct Connection* connection);
 
 /* runs quick unit tests in the demo app */
 void EWSUnitTestsRun(void);
@@ -335,7 +336,9 @@ static void ignoreSIGPIPE();
 static void callWSAStartupIfNecessary();
 static FILE* fopen_utf8_path(const char* utf8Path, const char* mode);
 static int pathInformationGet(const char* path, struct PathInformation* info);
-
+static int sendResponseBody(struct Connection* connection, const struct Response* response, ssize_t* bytesSent);
+static int sendResponseFile(struct Connection* connection, const struct Response* response, ssize_t* bytesSent)
+;
 #ifdef WIN32 /* Windows implementations of functions available on Linux/Mac OS X */
 	/* opendir/readdir/closedir API implementation with FindNextFile */
 	struct dirent {
@@ -395,14 +398,6 @@ static char* strdupIfNotNull(const char* strToDup) {
     return strdup(strToDup);
 }
 
-char* strdupDecodeGETParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound) {
-    return strdupDecodeGETorPOSTParam(paramNameIncludingEquals, request->path, valueIfNotFound);
-}
-
-char* strdupDecodePOSTParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound) {
-    return strdupDecodeGETorPOSTParam(paramNameIncludingEquals, request->body.contents, valueIfNotFound);
-}
-
 typedef enum {
     URLDecodeStateNormal,
     URLDecodeStatePercentFirstDigit,
@@ -440,6 +435,125 @@ char* strdupDecodeGETorPOSTParam(const char* paramNameIncludingEquals, const cha
     return decoded;
 }
 
+char* strdupDecodeGETParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound) {
+    return strdupDecodeGETorPOSTParam(paramNameIncludingEquals, request->path, valueIfNotFound);
+}
+
+char* strdupDecodePOSTParam(const char* paramNameIncludingEquals, const struct Request* request, const char* valueIfNotFound) {
+    return strdupDecodeGETorPOSTParam(paramNameIncludingEquals, request->body.contents, valueIfNotFound);
+}
+
+typedef enum {
+    PathStateNormal,
+    PathStateSep,
+    PathStateDot,
+} PathState;
+
+/* Aggressively escape strings for URLs. This adds the %12%0f stuff */
+static char* strdupEscapeForURL(const char* stringToEscape) {
+    struct HeapString escapedString;
+    heapStringInit(&escapedString);
+    const char* p = stringToEscape;
+    while ('\0' != *p) {
+        bool isULetter = *p <= 'Z' && *p >= 'A';
+        bool isLLetter = *p <= 'z' && *p >= 'a';
+        bool isNumber = *p <= '0' && *p >= '9';
+        if (isULetter || isLLetter || isNumber) {
+            heapStringAppendChar(&escapedString, *p);
+        } else {
+            // huh I guess %02x doesn't work in Windows?? holy cow
+            uint8_t pu8 = (uint8_t)*p;
+            uint8_t firstDigit = (pu8 & 0xf0) >> 4;
+            uint8_t secondDigit = pu8 & 0xf;
+            heapStringAppendFormat(&escapedString, "%%%x%x", firstDigit, secondDigit);
+        }
+        p++;
+    }
+    return escapedString.contents;
+}
+
+char* strdupEscapeForHTML(const char* stringToEscape) {
+    struct HeapString escapedString;
+    heapStringInit(&escapedString);
+    size_t stringToEscapeLength = strlen(stringToEscape);
+    if (0 == stringToEscapeLength) {
+        char* empty = (char*) malloc(1);
+        *empty = '\0';
+        return empty;
+    }
+    for (size_t i = 0; i < stringToEscapeLength; i++) {
+        // this is an excerpt of some things translated by the PHP htmlentities function
+        char c = stringToEscape[i];
+        switch (c) {
+            case '"':
+                heapStringAppendFormat(&escapedString, "&quot;");
+                break;
+            case '&':
+                heapStringAppendFormat(&escapedString, "&amp;");
+                break;
+            case '\'':
+                heapStringAppendFormat(&escapedString, "&#039;");
+                break;
+            case '<':
+                heapStringAppendFormat(&escapedString, "&lt;");
+                break;
+            case '>':
+                heapStringAppendFormat(&escapedString, "&gt;");
+                break;
+            case ' ':
+                heapStringAppendFormat(&escapedString, "&nbsp;");
+                break;
+            default:
+                heapStringAppendChar(&escapedString, c);
+                break;
+        }
+    }
+    return escapedString.contents;
+}
+
+/* Is someone using ../ to try to read a directory outside of the documentRoot? */
+static bool pathEscapesDocumentRoot(const char* path) {
+    int subdirDepth = 0;
+    PathState state = PathStateNormal;
+    bool isFirstChar = true;
+    while ('\0' != *path) {
+        switch (state) {
+            case PathStateNormal:
+                if ('/' == *path || '\\' == *path) {
+                    state = PathStateSep;
+                } else if (isFirstChar && '.' == *path) {
+                    state = PathStateDot;
+                } else if (isFirstChar) {
+                    subdirDepth++;
+                }
+                isFirstChar = false;
+                break;
+            case PathStateSep:
+                if ('.' == *path) {
+                    state = PathStateDot;
+                } else if ('/' != *path && '\\' != *path) {
+                    subdirDepth++;
+                    state = PathStateNormal;
+                }
+                break;
+            case PathStateDot:
+                if ('/' == *path) {
+                    state = PathStateSep;
+                } else if ('.' == *path) {
+                    subdirDepth--;
+                    state = PathStateNormal;
+                } else {
+                    state = PathStateNormal;
+                }
+                break;
+        }
+        path++;
+    }
+    if (subdirDepth < 0) {
+        return true;
+    }
+    return false;
+}
 
 static void URLDecode(const char* encoded, char* decoded, size_t decodedCapacity, URLDecodeType type) {
     /* We found a value. Unescape the URL. This is probably filled with bugs */
@@ -601,45 +715,6 @@ static bool heapStringIsSaneCString(const struct HeapString* heapString) {
         return false;
     }
     return true;
-}
-
-char* strdupEscapeForHTML(const char* stringToEscape) {
-    struct HeapString escapedString;
-    heapStringInit(&escapedString);
-    size_t stringToEscapeLength = strlen(stringToEscape);
-    if (0 == stringToEscapeLength) {
-        char* empty = (char*) malloc(1);
-        *empty = '\0';
-        return empty;
-    }
-    for (size_t i = 0; i < stringToEscapeLength; i++) {
-        // this is an excerpt of some things translated by the PHP htmlentities function
-        char c = stringToEscape[i];
-        switch (c) {
-            case '"':
-                heapStringAppendFormat(&escapedString, "&quot;");
-                break;
-            case '&':
-                heapStringAppendFormat(&escapedString, "&amp;");
-                break;
-            case '\'':
-                heapStringAppendFormat(&escapedString, "&#039;");
-                break;
-            case '<':
-                heapStringAppendFormat(&escapedString, "&lt;");
-                break;
-            case '>':
-                heapStringAppendFormat(&escapedString, "&gt;");
-                break;
-            case ' ':
-                heapStringAppendFormat(&escapedString, "&nbsp;");
-                break;
-            default:
-                heapStringAppendChar(&escapedString, c);
-                break;
-        }
-    }
-    return escapedString.contents;
 }
 
 static void heapStringAppendFormatV(struct HeapString* string, const char* format, va_list ap) {
@@ -812,79 +887,6 @@ struct Response* responseAllocWithFormat(int code, const char* status, const cha
     heapStringAppendFormatV(&response->body, format, ap);
     va_end(ap);
     return response;
-}
-
-typedef enum {
-	PathStateNormal,
-	PathStateSep,
-	PathStateDot,
-} PathState;
-
-/* Is someone using ../ to try to read a directory outside of the documentRoot? */
-static bool pathEscapesDocumentRoot(const char* path) {
-    int subdirDepth = 0;
-	PathState state = PathStateNormal;
-	bool isFirstChar = true;
-    while ('\0' != *path) {
-		switch (state) {
-		case PathStateNormal:
-			if ('/' == *path || '\\' == *path) {
-				state = PathStateSep;
-			} else if (isFirstChar && '.' == *path) {
-				state = PathStateDot;
-			} else if (isFirstChar) {
-				subdirDepth++;
-			}
-			isFirstChar = false;
-		break;
-		case PathStateSep:
-			if ('.' == *path) {
-				state = PathStateDot;
-			} else if ('/' != *path && '\\' != *path) {
-				subdirDepth++;
-				state = PathStateNormal;
-			}
-		break;
-		case PathStateDot:
-			if ('/' == *path) {
-				state = PathStateSep;
-			} else if ('.' == *path) {
-				subdirDepth--;
-				state = PathStateNormal;
-			} else {
-				state = PathStateNormal;
-			}
-		break;
-		}
-		path++;
-	}
-    if (subdirDepth < 0) {
-        return true;
-    }
-    return false;
-}
-
-/* Aggressively escape strings for URLs. This adds the %12%0f stuff */
-static char* strdupEscapeForURL(const char* stringToEscape) {
-	struct HeapString escapedString;
-	heapStringInit(&escapedString);
-	const char* p = stringToEscape;
-	while ('\0' != *p) {
-		bool isULetter = *p <= 'Z' && *p >= 'A';
-		bool isLLetter = *p <= 'z' && *p >= 'a';
-		bool isNumber = *p <= '0' && *p >= '9';
-		if (isULetter || isLLetter || isNumber) {
-			heapStringAppendChar(&escapedString, *p);
-		} else {
-			// huh I guess %02x doesn't work in Windows?? holy cow
-			uint8_t pu8 = (uint8_t)*p;
-			uint8_t firstDigit = (pu8 & 0xf0) >> 4;
-			uint8_t secondDigit = pu8 & 0xf;
-			heapStringAppendFormat(&escapedString, "%%%x%x", firstDigit, secondDigit);
-		}
-		p++;
-	}
-	return escapedString.contents;
 }
 
 struct Response* responseAllocServeFileFromRequestPath(const char* requestPath, const char* requestPathDecoded, const char* documentRoot) {
@@ -1211,6 +1213,24 @@ void serverInit(struct Server* server) {
     }
 }
 
+void serverStop(struct Server* server) {
+    serverMutexLock(server);
+    if (!server->initialized) {
+        ews_printf("Warning: Server %p was never initialized and you tried to stop it. Ignoring...\n", server);
+        return;
+    }
+    server->shouldRun = false;
+    if (server->listenerfd >= 0) {
+        close(server->listenerfd);
+    }
+    serverMutexUnlock(server);
+    pthread_mutex_lock(&server->stoppedMutex);
+    while (!server->stopped) {
+        pthread_cond_wait(&server->stoppedCond, &server->stoppedMutex);
+    }
+    pthread_mutex_unlock(&server->stoppedMutex);
+}
+
 void serverDeInit(struct Server* server) {
     pthread_mutex_destroy(&server->globalMutex);
     pthread_mutex_destroy(&server->stoppedMutex);
@@ -1348,22 +1368,16 @@ static int acceptConnectionsUntilStoppedInternal(struct Server* server, const st
 }
 
 
-void serverStop(struct Server* server) {
-    serverMutexLock(server);
-    if (!server->initialized) {
-        ews_printf("Warning: Server %p was never initialized and you tried to stop it. Ignoring...\n", server);
-        return;
+static int sendResponse(struct Connection* connection, const struct Response* response, ssize_t* bytesSent) {
+    if (response->body.length > 0) {
+        return sendResponseBody(connection, response, bytesSent);
     }
-    server->shouldRun = false;
-    if (server->listenerfd >= 0) {
-        close(server->listenerfd);
+    if (NULL != response->filenameToSend) {
+        return sendResponseFile(connection, response, bytesSent);
     }
-    serverMutexUnlock(server);
-    pthread_mutex_lock(&server->stoppedMutex);
-    while (!server->stopped) {
-        pthread_cond_wait(&server->stoppedCond, &server->stoppedMutex);
-    }
-    pthread_mutex_unlock(&server->stoppedMutex);
+    ews_printf("Error: the request for '%s' failed because there was neither a response body nor a filenameToSend\n", connection->request.path);
+    assert(0 && "See above ews_printf");
+    return 1;
 }
 
 static int sendResponseBody(struct Connection* connection, const struct Response* response, ssize_t* bytesSent) {
@@ -1503,18 +1517,6 @@ exit:
         return result;
     }
     return result;
-}
-
-static int sendResponse(struct Connection* connection, const struct Response* response, ssize_t* bytesSent) {
-    if (response->body.length > 0) {
-        return sendResponseBody(connection, response, bytesSent);
-    }
-    if (NULL != response->filenameToSend) {
-        return sendResponseFile(connection, response, bytesSent);
-    }
-    ews_printf("Error: the request for '%s' failed because there was neither a response body nor a filenameToSend\n", connection->request.path);
-    assert(0 && "See above ews_printf");
-    return 1;
 }
 
 static THREAD_RETURN_TYPE WINDOWS_STDCALL connectionHandlerThread(void* connectionPointer) {
@@ -1962,6 +1964,7 @@ static void ignoreSIGPIPE() {
 		ews_printf("Warning: Uninstalled previous SIGPIPE handler:%p and installed our handler which ignores SIGPIPE\n", previousSIGPIPEHandler);
 	}
 }
+
 static void printIPv4Addresses(uint16_t portInHostOrder) {
 	struct ifaddrs* addrs = NULL;
 	getifaddrs(&addrs);

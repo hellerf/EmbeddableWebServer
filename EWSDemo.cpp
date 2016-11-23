@@ -38,8 +38,6 @@ int main(int argc, const char * argv[]) {
     return 0;
 }
 
-static void writeDemoFiles();
-
 struct Response* createResponseForRequest(const struct Request* request, struct Connection* connection) {    
     if (request->path == strstr(request->path, "/stop")) {
         pthread_t stopThread;
