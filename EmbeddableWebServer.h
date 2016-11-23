@@ -1568,7 +1568,10 @@ static THREAD_RETURN_TYPE WINDOWS_STDCALL connectionHandlerThread(void* connecti
             ews_printf("%s:%s: You have returned a NULL response - I'm assuming you took over the request handling yourself.\n", connection->remoteHost, connection->remotePort);
         }
     } else {
-        ews_printf("No request found from %s:%s? Bailing...\n", connection->remoteHost, connection->remotePort);
+        ews_printf("No request found from %s:%s? Closing connection. Here's the last bytes we received in the request:\n", connection->remoteHost, connection->remotePort);
+		if (bytesRead > 0) {
+			fwrite(connection->sendRecvBuffer, 1, bytesRead, stdout);
+		}
     }
     /* Alright - we're done */
     close(connection->socketfd);
