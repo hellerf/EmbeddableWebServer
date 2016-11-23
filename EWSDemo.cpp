@@ -289,7 +289,7 @@ static void fput_utf8_c(FILE* fp, uint32_t c) {
 static void writeDemoFiles() {
 	serverMutexLock(&server);
 	// cross-platform mkdir yay
-	system("mkdir -p EWSDemoFiles"); 
+	system("mkdir EWSDemoFiles"); 
 	FILE* fp;
 	fp = fopen_utf8_path("EWSDemoFiles/美丽的妻子.html", "wb");
 	if (NULL == fp) {
