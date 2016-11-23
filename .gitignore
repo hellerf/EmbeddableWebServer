@@ -1,0 +1,14 @@
+# Visual Studio
+*.sdf
+*.opensdf
+Debug/
+
+# XCode
+xcuserdata/
+
+# Forrest (person who made this project)
+# I always exclude a folder called random where I can drop things like profile captures. I don't want these checked in, but they are associated with the project
+random/
+# The directory where the EWSDemo program drops files to serve
+EWSDemoFiles/
+
