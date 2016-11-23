@@ -1066,12 +1066,8 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                 break;
             case RequestParseStateHeaderValue:
                 /* skip the first space if we are saving this to header */
-                if (c == ' ') {
-					if (request->headersCount < REQUEST_MAX_HEADERS && request->headers[request->headersCount].value.length == 0) {
-						continue;
-					} else {
-						/* if we are out of headers, just forget about it. We don't care if we skip the space or not */
-					}
+                if (c == ' ' && request->headersCount < REQUEST_MAX_HEADERS && request->headers[request->headersCount].value.length == 0) {
+					/* if we are out of headers, just forget about it. We don't care if we skip the space or not */
                 } else if (c == '\r') {
                     if (request->headersCount < REQUEST_MAX_HEADERS) {
                         /* only go to the next header if we were able to fill this one out */
