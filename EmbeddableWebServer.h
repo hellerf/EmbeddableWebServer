@@ -173,8 +173,8 @@ struct Request {
 };
 
 struct ConnectionStatus {
-    size_t bytesSent;
-    size_t bytesReceived;
+    int64_t bytesSent;
+    int64_t bytesReceived;
 };
 
 /* This contains a full HTTP connection. For every connection, a thread is spawned
@@ -762,8 +762,8 @@ struct HeapString connectionDebugStringCreate(const struct Connection* connectio
 	heapStringAppendFormat(&debugString, "Bytes sent:%" PRId64 "\n", connection->status.bytesSent);
 	heapStringAppendFormat(&debugString, "Bytes received:%" PRId64 "\n", connection->status.bytesReceived);
     heapStringAppendFormat(&debugString, "Final request parse state:%d\n", connection->request.state);
-	heapStringAppendFormat(&debugString, "Header pool used:%" PRId64 "\n", connection->request.headersStringPoolOffset);
-	heapStringAppendFormat(&debugString, "Header count:%" PRId64 "\n", connection->request.headersCount);
+	heapStringAppendFormat(&debugString, "Header pool used:%" PRIu64 "\n", (uint64_t) connection->request.headersStringPoolOffset);
+	heapStringAppendFormat(&debugString, "Header count:%" PRIu64 "\n", (uint64_t) connection->request.headersCount);
     bool firstHeader = true;
     heapStringAppendString(&debugString, "\n*** Request Headers ***\n");
     for (size_t i = 0; i < connection->request.headersCount; i++) {
