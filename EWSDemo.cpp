@@ -1,6 +1,6 @@
-/* Copyright © 2016 Forrest Heller. Released under the BSD license */
+/* Copyright © 2016 Forrest Heller. Released under the 2-clause BSD license in EmbeddableWebServer.h */
 
-/* This is a demo for the Embeddable Web Server */
+/* This is a demo for the Embeddable Web Server. See EmbedabbleWebServer.h for more information */
 
 #include "EmbeddableWebServer.h"
 
@@ -262,7 +262,7 @@ struct Response* createResponseForRequest(const struct Request* request, struct 
         return NULL;
     }
 
-	return responseAllocServeFileFromRequestPath(request->path, request->pathDecoded, ".");
+	return responseAllocServeFileFromRequestPath(request->path, request->pathDecoded, "EWSDemoFiles");
 }
 
 #define MASK(high, low) ((1 << (high - low + 1)) - 1)
@@ -288,8 +288,10 @@ static void fput_utf8_c(FILE* fp, uint32_t c) {
 
 static void writeDemoFiles() {
 	serverMutexLock(&server);
+	// cross-platform mkdir yay
+	system("mkdir -p EWSDemoFiles"); 
 	FILE* fp;
-	fp = fopen_utf8_path("美丽的妻子.html", "wb");
+	fp = fopen_utf8_path("EWSDemoFiles/美丽的妻子.html", "wb");
 	if (NULL == fp) {
 		ews_printf("Could not write demo files\n");
 		return;
@@ -297,7 +299,7 @@ static void writeDemoFiles() {
 	fprintf(fp, "<html><head><meta http-equiv=\"Content-Type\" content=\"text/html;charset=UTF-8\"><title>早上好 - Good Morning</title></head>"
 		"<body><h1>你好老武</h1>This page is encoded in UTF-8. It has a Content-Type specifying UTF-8 so it should show up correctly.</body></html>");
 	fclose(fp);
-	fp = fopen("emoji.html", "wb");
+	fp = fopen("EWSDemoFiles/emoji.html", "wb");
 	if (NULL == fp) {
 		ews_printf("Could not write demo files\n");
 		return;
@@ -338,14 +340,14 @@ static void writeDemoFiles() {
 		197, 5, 241, 0, 160, 221, 78, 240, 236, 254, 10, 201, 0, 223, 100, 251, 88, 110, 42, 127, 121, 82, 143, 42, 232, 189, 144, 12, 0, 112, 83, 254, 59, 80, 233, 239, 30, 228, 2, 84, 160, 167, 243, 123, 154, 167, 206, 125, 191, 143,
 		230, 0, 128, 169, 194, 100, 228, 59, 230, 132, 170, 206, 105, 254, 114, 205, 29, 238, 123, 206, 156, 58, 138, 2, 252, 201, 184, 12, 112, 92, 136, 252, 4, 165, 200, 94, 7, 253, 255, 199, 5, 0, 0, 0, 0, 73, 69, 78, 68, 174,
 		66, 96, 130, };
-	fp = fopen("logo.png", "wb");
+	fp = fopen("EWSDemoFiles/logo.png", "wb");
 	if (NULL == fp) {
 		ews_printf("Could not write demo files\n");
 		return;
 	}
 	fwrite(EWSPNGLogo, 1, sizeof(EWSPNGLogo), fp);
 	fclose(fp);
-	fp = fopen("index.html", "wb");
+	fp = fopen("EWSDemoFiles/index.html", "wb");
 	if (NULL == fp) {
 		ews_printf("Could not write demo files\n");
 		return;
@@ -369,7 +371,7 @@ static void writeDemoFiles() {
 		"</body></html>",
 		timeString, (long) sizeof(struct Connection), (long) sizeof(struct Request));
 	fclose(fp);
-	fp = fopen("style.css", "wb");
+	fp = fopen("EWSDemoFiles/style.css", "wb");
 	if (NULL == fp) {
 		ews_printf("Could not write demo files\n");
 		return;
