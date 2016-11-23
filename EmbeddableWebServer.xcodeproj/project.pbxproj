@@ -7,32 +7,29 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0D9AE3FD1DDB0F5400107B0D /* Rotating_earth_(large).gif in CopyFiles */ = {isa = PBXBuildFile; fileRef = 0D9AE3FC1DDB0F4600107B0D /* Rotating_earth_(large).gif */; };
-		0D9AE43B1DE5861300107B0D /* EWSDemo.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0D9AE43A1DE5861300107B0D /* EWSDemo.cpp */; };
+		0D4493351DE58804000859D1 /* EWSDemo.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0D4493341DE58804000859D1 /* EWSDemo.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		0D9AE3F01DD85A4300107B0D /* CopyFiles */ = {
+		0D4493271DE587C2000859D1 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 12;
-			dstPath = .;
-			dstSubfolderSpec = 16;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
 			files = (
-				0D9AE3FD1DDB0F5400107B0D /* Rotating_earth_(large).gif in CopyFiles */,
 			);
-			runOnlyForDeploymentPostprocessing = 0;
+			runOnlyForDeploymentPostprocessing = 1;
 		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		0D9AE3F21DD85A4300107B0D /* MultithreadedHTTPServer */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = MultithreadedHTTPServer; sourceTree = BUILT_PRODUCTS_DIR; };
-		0D9AE3F51DD85A4300107B0D /* EmbeddableWebServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = EmbeddableWebServer.h; sourceTree = "<group>"; };
-		0D9AE3FC1DDB0F4600107B0D /* Rotating_earth_(large).gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = "Rotating_earth_(large).gif"; sourceTree = "<group>"; };
-		0D9AE43A1DE5861300107B0D /* EWSDemo.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = EWSDemo.cpp; sourceTree = "<group>"; };
+		0D4493291DE587C2000859D1 /* EmbeddableWebServer */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = EmbeddableWebServer; sourceTree = BUILT_PRODUCTS_DIR; };
+		0D4493331DE58804000859D1 /* EmbeddableWebServer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = EmbeddableWebServer.h; sourceTree = "<group>"; };
+		0D4493341DE58804000859D1 /* EWSDemo.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = EWSDemo.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		0D9AE3EF1DD85A4300107B0D /* Frameworks */ = {
+		0D4493261DE587C2000859D1 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -42,97 +39,88 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		0D9AE3E91DD85A4300107B0D = {
+		0D4493201DE587C2000859D1 = {
 			isa = PBXGroup;
 			children = (
-				0D9AE3F41DD85A4300107B0D /* MultithreadedHTTPServer */,
-				0D9AE3F31DD85A4300107B0D /* Products */,
+				0D4493331DE58804000859D1 /* EmbeddableWebServer.h */,
+				0D4493341DE58804000859D1 /* EWSDemo.cpp */,
+				0D44932A1DE587C2000859D1 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		0D9AE3F31DD85A4300107B0D /* Products */ = {
+		0D44932A1DE587C2000859D1 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				0D9AE3F21DD85A4300107B0D /* MultithreadedHTTPServer */,
+				0D4493291DE587C2000859D1 /* EmbeddableWebServer */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		0D9AE3F41DD85A4300107B0D /* MultithreadedHTTPServer */ = {
-			isa = PBXGroup;
-			children = (
-				0D9AE43A1DE5861300107B0D /* EWSDemo.cpp */,
-				0D9AE3FC1DDB0F4600107B0D /* Rotating_earth_(large).gif */,
-				0D9AE3F51DD85A4300107B0D /* EmbeddableWebServer.h */,
-			);
-			path = MultithreadedHTTPServer;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		0D9AE3F11DD85A4300107B0D /* MultithreadedHTTPServer */ = {
+		0D4493281DE587C2000859D1 /* EmbeddableWebServer */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 0D9AE3F91DD85A4300107B0D /* Build configuration list for PBXNativeTarget "MultithreadedHTTPServer" */;
+			buildConfigurationList = 0D4493301DE587C2000859D1 /* Build configuration list for PBXNativeTarget "EmbeddableWebServer" */;
 			buildPhases = (
-				0D9AE3EE1DD85A4300107B0D /* Sources */,
-				0D9AE3EF1DD85A4300107B0D /* Frameworks */,
-				0D9AE3F01DD85A4300107B0D /* CopyFiles */,
+				0D4493251DE587C2000859D1 /* Sources */,
+				0D4493261DE587C2000859D1 /* Frameworks */,
+				0D4493271DE587C2000859D1 /* CopyFiles */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			name = MultithreadedHTTPServer;
-			productName = MultithreadedHTTPServer;
-			productReference = 0D9AE3F21DD85A4300107B0D /* MultithreadedHTTPServer */;
+			name = EmbeddableWebServer;
+			productName = EmbeddableWebServer;
+			productReference = 0D4493291DE587C2000859D1 /* EmbeddableWebServer */;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		0D9AE3EA1DD85A4300107B0D /* Project object */ = {
+		0D4493211DE587C2000859D1 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				LastUpgradeCheck = 0810;
 				ORGANIZATIONNAME = "Forrest Heller";
 				TargetAttributes = {
-					0D9AE3F11DD85A4300107B0D = {
+					0D4493281DE587C2000859D1 = {
 						CreatedOnToolsVersion = 8.1;
 						ProvisioningStyle = Automatic;
 					};
 				};
 			};
-			buildConfigurationList = 0D9AE3ED1DD85A4300107B0D /* Build configuration list for PBXProject "MultithreadedHTTPServer" */;
+			buildConfigurationList = 0D4493241DE587C2000859D1 /* Build configuration list for PBXProject "EmbeddableWebServer" */;
 			compatibilityVersion = "Xcode 3.2";
 			developmentRegion = English;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 			);
-			mainGroup = 0D9AE3E91DD85A4300107B0D;
-			productRefGroup = 0D9AE3F31DD85A4300107B0D /* Products */;
+			mainGroup = 0D4493201DE587C2000859D1;
+			productRefGroup = 0D44932A1DE587C2000859D1 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				0D9AE3F11DD85A4300107B0D /* MultithreadedHTTPServer */,
+				0D4493281DE587C2000859D1 /* EmbeddableWebServer */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
-		0D9AE3EE1DD85A4300107B0D /* Sources */ = {
+		0D4493251DE587C2000859D1 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0D9AE43B1DE5861300107B0D /* EWSDemo.cpp in Sources */,
+				0D4493351DE58804000859D1 /* EWSDemo.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		0D9AE3F71DD85A4300107B0D /* Debug */ = {
+		0D44932E1DE587C2000859D1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -141,12 +129,15 @@
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_SUSPICIOUS_IMPLICIT_CONVERSION = YES;
 				CLANG_WARN_SUSPICIOUS_MOVES = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
@@ -163,9 +154,8 @@
 					"DEBUG=1",
 					"$(inherited)",
 				);
-				GCC_WARN_ABOUT_MISSING_PROTOTYPES = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_SHADOW = YES;
 				GCC_WARN_UNDECLARED_SELECTOR = YES;
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
@@ -174,11 +164,10 @@
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
-				STRIP_INSTALLED_PRODUCT = NO;
 			};
 			name = Debug;
 		};
-		0D9AE3F81DD85A4300107B0D /* Release */ = {
+		0D44932F1DE587C2000859D1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -187,12 +176,15 @@
 				CLANG_CXX_LIBRARY = "libc++";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_SUSPICIOUS_IMPLICIT_CONVERSION = YES;
 				CLANG_WARN_SUSPICIOUS_MOVES = YES;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
@@ -203,9 +195,8 @@
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu99;
 				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_ABOUT_MISSING_PROTOTYPES = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
 				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_SHADOW = YES;
 				GCC_WARN_UNDECLARED_SELECTOR = YES;
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
@@ -213,18 +204,17 @@
 				MACOSX_DEPLOYMENT_TARGET = 10.11;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = macosx;
-				STRIP_INSTALLED_PRODUCT = NO;
 			};
 			name = Release;
 		};
-		0D9AE3FA1DD85A4300107B0D /* Debug */ = {
+		0D4493311DE587C2000859D1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
 		};
-		0D9AE3FB1DD85A4300107B0D /* Release */ = {
+		0D4493321DE587C2000859D1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -234,24 +224,25 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		0D9AE3ED1DD85A4300107B0D /* Build configuration list for PBXProject "MultithreadedHTTPServer" */ = {
+		0D4493241DE587C2000859D1 /* Build configuration list for PBXProject "EmbeddableWebServer" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				0D9AE3F71DD85A4300107B0D /* Debug */,
-				0D9AE3F81DD85A4300107B0D /* Release */,
+				0D44932E1DE587C2000859D1 /* Debug */,
+				0D44932F1DE587C2000859D1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		0D9AE3F91DD85A4300107B0D /* Build configuration list for PBXNativeTarget "MultithreadedHTTPServer" */ = {
+		0D4493301DE587C2000859D1 /* Build configuration list for PBXNativeTarget "EmbeddableWebServer" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				0D9AE3FA1DD85A4300107B0D /* Debug */,
-				0D9AE3FB1DD85A4300107B0D /* Release */,
+				0D4493311DE587C2000859D1 /* Debug */,
+				0D4493321DE587C2000859D1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
-	rootObject = 0D9AE3EA1DD85A4300107B0D /* Project object */;
+	rootObject = 0D4493211DE587C2000859D1 /* Project object */;
 }

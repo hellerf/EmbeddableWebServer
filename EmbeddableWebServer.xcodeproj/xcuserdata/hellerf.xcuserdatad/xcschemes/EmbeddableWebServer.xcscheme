@@ -14,10 +14,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "0D9AE3F11DD85A4300107B0D"
-               BuildableName = "MultithreadedHTTPServer"
-               BlueprintName = "MultithreadedHTTPServer"
-               ReferencedContainer = "container:MultithreadedHTTPServer.xcodeproj">
+               BlueprintIdentifier = "0D4493281DE587C2000859D1"
+               BuildableName = "EmbeddableWebServer"
+               BlueprintName = "EmbeddableWebServer"
+               ReferencedContainer = "container:EmbeddableWebServer.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -32,10 +32,10 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "0D9AE3F11DD85A4300107B0D"
-            BuildableName = "MultithreadedHTTPServer"
-            BlueprintName = "MultithreadedHTTPServer"
-            ReferencedContainer = "container:MultithreadedHTTPServer.xcodeproj">
+            BlueprintIdentifier = "0D4493281DE587C2000859D1"
+            BuildableName = "EmbeddableWebServer"
+            BlueprintName = "EmbeddableWebServer"
+            ReferencedContainer = "container:EmbeddableWebServer.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <AdditionalOptions>
@@ -49,18 +49,16 @@
       useCustomWorkingDirectory = "NO"
       ignoresPersistentStateOnLaunch = "NO"
       debugDocumentVersioning = "YES"
-      enableThreadSanitizer = "YES"
-      stopOnEveryThreadSanitizerIssue = "YES"
       debugServiceExtension = "internal"
       allowLocationSimulation = "YES">
       <BuildableProductRunnable
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "0D9AE3F11DD85A4300107B0D"
-            BuildableName = "MultithreadedHTTPServer"
-            BlueprintName = "MultithreadedHTTPServer"
-            ReferencedContainer = "container:MultithreadedHTTPServer.xcodeproj">
+            BlueprintIdentifier = "0D4493281DE587C2000859D1"
+            BuildableName = "EmbeddableWebServer"
+            BlueprintName = "EmbeddableWebServer"
+            ReferencedContainer = "container:EmbeddableWebServer.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <AdditionalOptions>
@@ -76,10 +74,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "0D9AE3F11DD85A4300107B0D"
-            BuildableName = "MultithreadedHTTPServer"
-            BlueprintName = "MultithreadedHTTPServer"
-            ReferencedContainer = "container:MultithreadedHTTPServer.xcodeproj">
+            BlueprintIdentifier = "0D4493281DE587C2000859D1"
+            BuildableName = "EmbeddableWebServer"
+            BlueprintName = "EmbeddableWebServer"
+            ReferencedContainer = "container:EmbeddableWebServer.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>
