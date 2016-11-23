@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		0D9AE3F61DD85A4300107B0D /* EmbeddableWebServer.c in Sources */ = {isa = PBXBuildFile; fileRef = 0D9AE3F51DD85A4300107B0D /* EmbeddableWebServer.c */; };
 		0D9AE3FD1DDB0F5400107B0D /* Rotating_earth_(large).gif in CopyFiles */ = {isa = PBXBuildFile; fileRef = 0D9AE3FC1DDB0F4600107B0D /* Rotating_earth_(large).gif */; };
+		0D9AE43B1DE5861300107B0D /* EWSDemo.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 0D9AE43A1DE5861300107B0D /* EWSDemo.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -26,8 +26,9 @@
 
 /* Begin PBXFileReference section */
 		0D9AE3F21DD85A4300107B0D /* MultithreadedHTTPServer */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = MultithreadedHTTPServer; sourceTree = BUILT_PRODUCTS_DIR; };
-		0D9AE3F51DD85A4300107B0D /* EmbeddableWebServer.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = EmbeddableWebServer.c; sourceTree = "<group>"; };
+		0D9AE3F51DD85A4300107B0D /* EmbeddableWebServer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = EmbeddableWebServer.h; sourceTree = "<group>"; };
 		0D9AE3FC1DDB0F4600107B0D /* Rotating_earth_(large).gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = "Rotating_earth_(large).gif"; sourceTree = "<group>"; };
+		0D9AE43A1DE5861300107B0D /* EWSDemo.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = EWSDemo.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,8 +61,9 @@
 		0D9AE3F41DD85A4300107B0D /* MultithreadedHTTPServer */ = {
 			isa = PBXGroup;
 			children = (
+				0D9AE43A1DE5861300107B0D /* EWSDemo.cpp */,
 				0D9AE3FC1DDB0F4600107B0D /* Rotating_earth_(large).gif */,
-				0D9AE3F51DD85A4300107B0D /* EmbeddableWebServer.c */,
+				0D9AE3F51DD85A4300107B0D /* EmbeddableWebServer.h */,
 			);
 			path = MultithreadedHTTPServer;
 			sourceTree = "<group>";
@@ -123,7 +125,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0D9AE3F61DD85A4300107B0D /* EmbeddableWebServer.c in Sources */,
+				0D9AE43B1DE5861300107B0D /* EWSDemo.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
