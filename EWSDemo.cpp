@@ -225,7 +225,7 @@ struct Response* createResponseForRequest(const struct Request* request, struct 
     }
     
     if (request->path == strstr(request->path, "/about")) {
-        return responseAllocHTML("<html><head><title>About</title><body>Embeddable Web Server version 1.0 by Forrest Heller</body></html>");
+        return responseAllocHTML("<html><head><title>About</title><body>Embeddable Web Server version " EMBEDDABLE_WEB_SERVER_VERSION_STRING " by Forrest Heller</body></html>");
     }
 
 	/* This is an example of how you can take over the HTTP and do whatever you want */
@@ -262,7 +262,7 @@ struct Response* createResponseForRequest(const struct Request* request, struct 
         return NULL;
     }
 
-	return responseAllocServeFileFromRequestPath(request->path, request->pathDecoded, "EWSDemoFiles");
+	return responseAllocServeFileFromRequestPath("/", request->path, request->pathDecoded, "EWSDemoFiles");
 }
 
 #define MASK(high, low) ((1 << (high - low + 1)) - 1)

@@ -248,8 +248,13 @@ int acceptConnectionsUntilStopped(struct Server* serverOrNULL, const struct sock
 /* use these in createResponseForRequest */
 /* Allocate a response with an initial body size that you can strcpy to */
 struct Response* responseAlloc(int code, const char* status, const char* contentType, size_t contentsLength);
-/* Serve a file from documentRoot. If you just want to serve the current directory over HTTP just do "." */
-struct Response* responseAllocServeFileFromRequestPath(const char* requestPath, const char* requestPathDecoded, const char* documentRoot);
+/* Serve a file from documentRoot. If you just want to serve the current directory over HTTP just do "."  
+To serve out the current directory like a normal web server do:
+responseAllocServeFileFromRequestPath("/", request->path, request->pathDecoded, ".") 
+To serve files with a prefix do this:
+responseAllocServeFileFromRequestPath("/release/current", request->path, request->pathDecoded, "/var/root/www/release-5.0.0") so people will go to:
+http://55.55.55.55/release/current and be served /var/root/www/release-5.0.0 */
+struct Response* responseAllocServeFileFromRequestPath(const char* pathPrefix, const char* requestPath, const char* requestPathDecoded, const char* documentRoot);
 /* You can use heapStringAppend*(&response->body) to dynamically generate the body */
 struct Response* responseAllocHTML(const char* html);
 struct Response* responseAllocHTMLWithStatus(int code, const char* status, const char* html);
@@ -897,21 +902,136 @@ struct Response* responseAllocWithFormat(int code, const char* status, const cha
     return response;
 }
 
-struct Response* responseAllocServeFileFromRequestPath(const char* requestPath, const char* requestPathDecoded, const char* documentRoot) {
-    if (pathEscapesDocumentRoot(requestPathDecoded)) {
+static bool requestMatchesPathPrefix(const char* requestPathDecoded, const char* pathPrefix, size_t* matchLength) {
+	/* special case: pathPrefix is "" - matching everything*/
+	if (pathPrefix[0] == '\0') {
+		return true;
+	}
+	/* special case: requestPathDecoded is "" - match nothing */
+	if (requestPathDecoded[0] == '\0') {
+		return false;
+	}
+	/* cases to think about:
+	pathPrefix  = "/releases/current" OR  "/releases/current/"
+	requestPath = "/releases/current/" OR "/releases/current" */
+	size_t requestPathDecodedLength = strlen(requestPathDecoded);
+	size_t pathPrefixLength = strlen(pathPrefix);
+	/* we checked for zero-length strings above so it's afe to do this*/
+	bool pathPrefixEndsWithSlash = pathPrefix[pathPrefixLength - 1] == '/';
+	bool requestPathDecodedEndsWithSlash = requestPathDecoded[requestPathDecodedLength - 1] == '/';
+	if (requestPathDecoded == strstr(requestPathDecoded, pathPrefix)) {
+		/* if this code path finds a match, it will always be the full path prefix that's matched */
+		if (NULL != matchLength) {
+			*matchLength = pathPrefixLength;
+		}
+		/* ok we just matched pathPrefix = "/releases/current" but what if requestPathDecoded is "/releases/currentXXX"? */
+		if (!pathPrefixEndsWithSlash) {
+			/* pathPrefix is equal to requestPathDecoded */
+			if (pathPrefixLength == requestPathDecodedLength) {
+				assert(0 == strcmp(pathPrefix, requestPathDecoded) && "I'm assuming that the strings match with the length check + strstr above and I hope that's true. If not, that check needs to be replaced with real (0 == strcmp)");
+				return true;
+			}
+			assert(requestPathDecodedLength > pathPrefixLength && "In the following code I am assuming that the requestPathDecoded is indeed longer than the path prefix because of the length check I did above (even though that was ==, the strstr has to match it)");
+			/* pathPrefix = "/releases/current" and requestPathDecoded = "/releases/currentX" - we needs X to be a /
+			We want pathPrefix to match "/releases/current/" but not "/releases/current1"	*/
+			if (requestPathDecoded[pathPrefixLength] == '/') {
+				return true;
+			}
+			/* this is the case where pathPrefix = "/releases/current" and requestPathDecoded = "/releases/current1" */
+			return false;
+		}
+		return true;
+	}
+	/* It can still be the case that pathPrefix is "/releases/current/" and requestPathDecoded is "/releases/current".
+	It's tempting to just put an assert and make the user fix it but we'll use some extra code to handle it. */
+	if (requestPathDecodedLength == pathPrefixLength - 1) {
+		/* make sure we're specifically matchig "/releases/current/" with "/releases/current" and not something like "/releases/currentX" */
+		if (pathPrefixEndsWithSlash && !requestPathDecodedEndsWithSlash) {
+			if (0 == strncmp(requestPathDecoded, pathPrefix, requestPathDecodedLength)) {
+				if (NULL != matchLength) {
+					*matchLength = requestPathDecodedLength;
+				}
+				return true;
+			}
+		}
+	}
+	return false;
+}
+/*
+Here's how the path logic works:
+
+Lets say I want to serve traffic on the 'releases/current' path out of the 'EWS-1.1' directory. EWS-1.1 has no index.html
+pathPrefix = "/releases/current" OR "/releases/current/"
+requestPath = "/releases/current" OR "/releases/current/" OR "/releases/current/page.html"
+
+Performed in requestMatchesPathPrefix, which will give us the match length
+1. match pathPrefix with requestPath and figure out requestPathSuffix
+See requestMatchesPathPrefix for more information
+requestPathSuffix = requestPath - pathPrefix or rather:
+requestPathSuffix = (sometimes!) requestPath + strlen(pathPrefix)
+requestPathSuffix = (other times!) requestPath + strlen(pathPrefix) - 1
+
+requestPathSuffix will now sometimes have a leading "/" or not, depending on how requestMatchesPathPrefix went
+
+Some motivating cases:
+If requestPath = "/releases/current" then requestPathSuffix = ""
+If requestPath = "/releases/current/" then requestPathSuffix = "/"
+if requestPath = "/releases/current/page.html" then requestPathSuffix = "/page.html"
+Note:
+If requestPath = "/releases/currentX" (where X is not a slash character) then we need to reject this request
+
+2. It turns out that requestPathSuffix can sometimes start with a "/" or be empty or be something arbitrary
+If requestPathSuffix starts with a "/" or "\" go ahead and skip the initial / and \'s. So if requestPath
+is "/releases/current/page.html" then requestPathSuffix should be "page.html"
+If requestPath
+
+* Now requestPathSuffix is some arbitrary (and untrustable!) string (without the "/")
+
+3. We can check if requestPathSuffix will leave the document root with pathEscapesDocumentRoot(requestPathSuffix)
+
+4. We can form a file path with the documentRoot (which has no trailing / or \ !)
+documentRoot = "EWS-1.1"
+filePath = documentRoot + "/" + requestPathSuffix
+filePath = "EWS-1.1" + "/" + "page.html"
+filePath = "EWS-1.1" + "/" + ""
+filePath = "EWS-1.1" + "/" + "docs/blahblah/.."
+
+5. There is one tricky thing with directories. If filePath is a directory we will serve the
+directory contents with links to the files. We need to figure out how to link to the files
+If the browser sent a URL that ends in a / we can use totally relative links like:
+<a href="code.cpp">code.cpp</a> (for something like http://x.com/release/current/)
+But if the URL does not end in a / we need to do:
+<a href="/release/current/code.cpp">code.cpp</a>
+I'll call out this step below
+*/
+struct Response* responseAllocServeFileFromRequestPath(const char* pathPrefix, const char* requestPath, const char* requestPathDecoded, const char* documentRoot) {
+	// Step 1 (see above)
+	size_t matchLength = 0;
+	/* Do we even match this path? Also figure out the suffix (note the use of the _decoded_ path -- otherwise we would have %12s and stuff everywhere */
+	if (!requestMatchesPathPrefix(requestPathDecoded, pathPrefix, &matchLength)) {
+		return responseAlloc400BadRequestHTML("You requested the server to serve a path it doesn't know. Use the <code>requestMatchesPathPrefix</code> before passing this path. Or use a <code>pathPrefix</code> of <code>/</code> to have the server serve files from all URLs.");
+	}
+	const char* requestPathSuffix = requestPathDecoded + matchLength;
+	// Step 2 (see above)
+	while ('/' == *requestPathSuffix || '\\' == *requestPathSuffix) {
+		requestPathSuffix++;
+	}
+	// Step 3 (see above)
+	if (pathEscapesDocumentRoot(requestPathSuffix)) {
         return responseAllocHTMLWithStatus(403, "Forbidden", "<html><head><title>Forbidden</title></head><body>You are not allowed to access this URL</body></html>");
     }
+	// Step 4 (see above)
 	struct HeapString filePath;
 	heapStringInit(&filePath);
 	heapStringSetToCString(&filePath, documentRoot);
-	heapStringAppendString(&filePath, requestPathDecoded);
-	if (strEndsWith(filePath.contents, "/")) {
-		filePath.length--;
-		filePath.contents[filePath.length] = '\0';
-	} 
+	bool pathSuffixIsNotEmpty = '\0' != *requestPathSuffix;
+	if (pathSuffixIsNotEmpty) {
+		heapStringAppendChar(&filePath, '/');
+		heapStringAppendString(&filePath, requestPathSuffix);
+	}
     struct PathInformation pathInfo;
+	ews_printf_debug("Looking up file path '%s' to serve request '%s' (originally encoded '%s'). We believe the path suffix is '%s'...\n", filePath.contents, requestPathDecoded, requestPath, requestPathSuffix);
 	int result = pathInformationGet(filePath.contents, &pathInfo);
-	
     if (0 != result) {
         ews_printf("Failed to serve file: pathInformation returned %d for path '%s', request '%s' documentRoot '%s' with %s = %d\n", result, filePath.contents, requestPathDecoded, documentRoot, strerror(errno), errno);
         heapStringFreeContents(&filePath);
@@ -957,12 +1077,27 @@ struct Response* responseAllocServeFileFromRequestPath(const char* requestPath, 
             return responseAlloc500InternalErrorHTML("We could not open the directory for iterating");
         }
         struct Response* response = responseAllocHTML("<html><head><title>Directory Reading</title><body>");
-        struct dirent* entry;
-		bool addSlashInURL = !strEndsWith(requestPath, "/");
-		const char* slashOrEmpty = addSlashInURL ? "/" : "";
-        while (NULL != (entry = readdir(dir))) {
+		// Step 5 (see above) - this is actually pretty tricky
+		/* Again, if the URL doesn't end in a / then we need to figure out how to link to the file */
+		const char* hrefPrefix = "";
+		const char* frontSlash = "";
+		if (!strEndsWith(requestPathDecoded, "/")) {
+			/* find the last /.  in /releases/current, point to /current*/
+			hrefPrefix = strrchr(requestPathDecoded, '/');
+			if (NULL == hrefPrefix) {
+				/* I don't think browsers will ever send something without a / */
+				hrefPrefix = requestPath;
+			} else {
+				/* hrefPrefix = "/current" but we just want to point to "current" */
+				hrefPrefix++; // skip the "/"
+			}
+			/* we want to put a / in between hrefPrefix and entry->d_name but I don't want to allocate any more gosh darn memory*/
+			frontSlash = "/";
+		}
+		struct dirent* entry;
+		while (NULL != (entry = readdir(dir))) {
 			char* escapedEntryName = strdupEscapeForURL(entry->d_name);
-			heapStringAppendFormat(&response->body, "<a href=\"%s%s%s\">%s</a><br>\n", requestPath, slashOrEmpty, escapedEntryName, entry->d_name);
+			heapStringAppendFormat(&response->body, "<a href=\"%s%s%s\">%s</a><br>\n", hrefPrefix, frontSlash, escapedEntryName, entry->d_name);
 			free(escapedEntryName);
         }
         closedir(dir);
@@ -1408,7 +1543,7 @@ static int sendResponseBody(struct Connection* connection, const struct Response
     /* Second, if a response body exists, send that */
     if (response->body.length > 0) {
         sendResult = send(connection->socketfd, response->body.contents, response->body.length, 0);
-        if (sendResult != response->body.length) {
+		if (sendResult != response->body.length) {
 			ews_printf("Failed to respond to %s:%s because we could not send the HTTP response *body*. send returned %" PRId64 " with %s = %d\n",
                    connection->remoteHost,
                    connection->remotePort,
@@ -1452,6 +1587,7 @@ static int sendResponseFile(struct Connection* connection, const struct Response
         goto exit;
     }
     contentType = MIMETypeFromFile(response->filenameToSend, (const uint8_t*) connection->sendRecvBuffer, actualMIMEReadSize);
+	ews_printf_debug("Detected MIME type '%s' for file '%s'\n", contentType, response->filenameToSend);
     /* get the file length, laboriously checking for errors */
     result = fseek(fp, 0, SEEK_END);
     if (0 != result) {
@@ -1513,6 +1649,7 @@ exit:
         fclose(fp);
     }
     if (NULL != errorResponse) {
+		ews_printf("Instead of satisfying the request for '%s' we encountered an error and will return %d %s\n", connection->request.path, response->code, response->status);
         ssize_t errorBytesSent = 0;
         result = sendResponseBody(connection, errorResponse, &errorBytesSent);
         *bytesSent = *bytesSent + errorBytesSent;
@@ -1574,7 +1711,7 @@ static THREAD_RETURN_TYPE WINDOWS_STDCALL connectionHandlerThread(void* connecti
             ews_printf("%s:%s: You have returned a NULL response - I'm assuming you took over the request handling yourself.\n", connection->remoteHost, connection->remotePort);
         }
     } else {
-        ews_printf("No request found from %s:%s? Closing connection. Here's the last bytes we received in the request:\n", connection->remoteHost, connection->remotePort);
+        ews_printf("No request found from %s:%s? Closing connection. Here's the last bytes we received in the request (length %" PRIi64 "). The total bytes received on this connection: %" PRIi64 " :\n", connection->remoteHost, connection->remotePort, (int64_t) bytesRead, connection->status.bytesReceived);
 		if (bytesRead > 0) {
 			fwrite(connection->sendRecvBuffer, 1, bytesRead, stdout);
 		}
@@ -1785,6 +1922,26 @@ static void testPathEscapesRoot() {
 	assert(!pathEscapesDocumentRoot("dir1/dir2/.././"));
 	assert(!pathEscapesDocumentRoot("dir1/dir2/../.././"));
 	assert(!pathEscapesDocumentRoot("dir1/dir2/../../."));
+	assert(!pathEscapesDocumentRoot("."));
+	assert(pathEscapesDocumentRoot(".."));
+	assert(pathEscapesDocumentRoot("../.."));
+	assert(!pathEscapesDocumentRoot("test/.."));
+}
+
+static void testPathMatching() {
+	size_t matchLength;
+	assert(requestMatchesPathPrefix("/releases/current", "/", &matchLength));
+	assert(requestMatchesPathPrefix("/releases/current", "", &matchLength));
+	assert(requestMatchesPathPrefix("/releases/current", "/releases/current", &matchLength));
+	assert(requestMatchesPathPrefix("/releases/current/", "/releases/current", &matchLength));
+	assert(requestMatchesPathPrefix("/releases/current", "/releases/current/", &matchLength));
+	assert(requestMatchesPathPrefix("/files/Debug", "/files", &matchLength));
+	assert(requestMatchesPathPrefix("/", "/", &matchLength));
+	assert(!requestMatchesPathPrefix("/b", "/a", &matchLength));
+	assert(!requestMatchesPathPrefix("/.", "/a", &matchLength));
+	assert(!requestMatchesPathPrefix("/releases/currentX", "/releases/current", &matchLength));
+	assert(!requestMatchesPathPrefix("/releases/currentX", "/releases/current/", &matchLength));
+	assert(!requestMatchesPathPrefix("/releases/curren", "/releases/current", &matchLength));
 }
 
 void EWSUnitTestsRun() {
@@ -1792,6 +1949,7 @@ void EWSUnitTestsRun() {
     teststrdupHTMLEscape();
     teststrdupEscape();
 	testPathEscapesRoot();
+	testPathMatching();
     /* reset counters from tests */
     memset(&counters, 0, sizeof(counters));
 }
