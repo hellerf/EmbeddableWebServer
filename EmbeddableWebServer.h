@@ -210,6 +210,7 @@ struct Response {
     char* filenameToSend;
     char* status;
     char* contentType;
+	char* extraHeaders; // can be NULL
 };
 
 struct Server {
@@ -343,8 +344,9 @@ static void callWSAStartupIfNecessary();
 static FILE* fopen_utf8_path(const char* utf8Path, const char* mode);
 static int pathInformationGet(const char* path, struct PathInformation* info);
 static int sendResponseBody(struct Connection* connection, const struct Response* response, ssize_t* bytesSent);
-static int sendResponseFile(struct Connection* connection, const struct Response* response, ssize_t* bytesSent)
-;
+static int sendResponseFile(struct Connection* connection, const struct Response* response, ssize_t* bytesSent);
+static int snprintfResponseHeader(char* destination, size_t destinationCapacity, int code, const char* status, const char* contentType, const char* extraHeaders, size_t contentLength);
+
 #ifdef WIN32 /* Windows implementations of functions available on Linux/Mac OS X */
 	/* opendir/readdir/closedir API implementation with FindNextFile */
 	struct dirent {
@@ -993,8 +995,8 @@ struct Response* responseAlloc500InternalErrorHTML(const char* extraInformationO
     } else {
         return responseAllocWithFormat(500, "Internal Error", "text/html; charset=UTF-8", "<html><head><title>500 Internal Error</title></head><body>There was an internal error while completing your request. %s</body></html>", extraInformationOrNull);
     }
-    
 }
+
 struct Response* responseAllocWithFile(const char* filename, const char* MIMETypeOrNULL) {
     struct Response* response = responseAlloc(200, "OK", MIMETypeOrNULL, 0);
     response->filenameToSend = strdup(filename);
@@ -1011,6 +1013,9 @@ static void responseFree(struct Response* response) {
     if (NULL != response->contentType) {
         free(response->contentType);
     }
+	if (NULL != response->extraHeaders) {
+		free(response->extraHeaders);
+	}
     heapStringFreeContents(&response->body);
     free(response);
 }
@@ -1384,17 +1389,7 @@ static int sendResponse(struct Connection* connection, const struct Response* re
 
 static int sendResponseBody(struct Connection* connection, const struct Response* response, ssize_t* bytesSent) {
     /* First send the response HTTP headers */
-    int headerLength = snprintf(connection->responseHeader,
-                                   sizeof(connection->responseHeader),
-                                   "HTTP/1.0 %d %s\r\n"
-                                   "Content-Type: %s\r\n"
-                                   "Content-Length: %ld\r\n"
-                                   "Server: Embeddable Web Server/" EMBEDDABLE_WEB_SERVER_VERSION_STRING "\r\n"
-                                   "\r\n",
-                                   response->code,
-                                   response->status,
-                                   response->contentType,
-                                   (long)response->body.length);
+	int headerLength = snprintfResponseHeader(connection->responseHeader, sizeof(connection->responseHeader), response->code, response->status, response->contentType, response->extraHeaders, response->body.length);
     ssize_t sendResult;
     sendResult = send(connection->socketfd, connection->responseHeader, headerLength, 0);
     if (sendResult != headerLength) {
@@ -1676,7 +1671,26 @@ static bool strEndsWith(const char* big, const char* endsWith) {
     return true;
 }
 
-/* Quickie unit tests */
+static int snprintfResponseHeader(char* destination, size_t destinationCapacity, int code, const char* status, const char* contentType,  const char* extraHeaders, size_t contentLength) {
+	if (NULL == extraHeaders) {
+		extraHeaders = "";
+	}
+	return snprintf(destination,
+		destinationCapacity,
+		"HTTP/1.1 %d %s\r\n"
+		"Content-Type: %s\r\n"
+		"Content-Length: %" PRIu64 "\r\n"
+		"Server: Embeddable Web Server/" EMBEDDABLE_WEB_SERVER_VERSION_STRING "\r\n"
+		"%s"
+		"\r\n",
+		code,
+		status,
+		contentType,
+		(uint64_t)contentLength,
+		extraHeaders);
+}
+
+/* Quick unit tests */
 
 static void testHeapString() {
     pthread_mutex_init(&counters.lock, NULL);
