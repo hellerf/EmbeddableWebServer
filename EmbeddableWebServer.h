@@ -49,7 +49,7 @@ static bool OptionListDirectoryContents = true;
 
 /* These bound the memory used by a request. The headers used to be dynamically allocated but I've made them hard coded because: 1. Memory used by a request should be bounded 2. It was responsible for 2 * headersCount allocations every request */
 #define REQUEST_MAX_HEADERS 64
-#define REQUEST_HEADERS_MAX_MEMORY (16 * 1024)
+#define REQUEST_HEADERS_MAX_MEMORY (8 * 1024)
 #define REQUEST_MAX_BODY_LENGTH (128 * 1024 * 1024) /* (rather arbitrary) */
 
 /* the buffer in connection used for sending and receiving. Should be big enough to fread(buffer) -> send(buffer) */
