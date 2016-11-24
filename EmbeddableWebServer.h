@@ -386,6 +386,12 @@ static int snprintfResponseHeader(char* destination, size_t destinationCapacity,
 	#define close(x) closesocket(x)
 #endif // Linux/Mac OS X
 
+#ifdef EWS_FUZZ_TEST
+#define recv(socket, buffer, bufferLength, flags) read(socket, buffer, bufferLength)
+#define send(socket, buffer, bufferLength, flags) 0
+//write(socket, buffer, bufferLength)
+#endif
+
 static THREAD_RETURN_TYPE WINDOWS_STDCALL connectionHandlerThread(void* connectionPointer);
 
 typedef enum {
@@ -397,7 +403,8 @@ static void URLDecode(const char* encoded, char* decoded, size_t decodedCapacity
 
 static const struct Header* headerInRequest(const char* headerName, const struct Request* request) {
     for (size_t i = 0; i < request->headersCount; i++) {
-        if (0 == strcasecmp(request->headers[i].name.contents, headerName)) {
+		assert(NULL != request->headers[i].name.contents);
+		if (0 == strcasecmp(request->headers[i].name.contents, headerName)) {
             return &request->headers[i];
         }
     }
@@ -1694,6 +1701,15 @@ static THREAD_RETURN_TYPE WINDOWS_STDCALL connectionHandlerThread(void* connecti
             foundRequest = true;
             break;
         }
+#ifdef EWS_FUZZ_TESTING /* This enables us to fuzz test different content lengths */
+		if (connection->request.state == RequestParseStateBody) {
+			foundRequest = true;
+		}
+#endif
+		if (connection->request.state = RequestParseStateBadRequest) {
+			ews_printf("Bad request found from %s:%s\n", connection->remoteHost, connection->remotePort);
+			break;
+		}
     }
     requestPrintWarnings(&connection->request, connection->remoteHost, connection->remotePort);
     ssize_t bytesSent = 0;
