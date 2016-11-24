@@ -1306,9 +1306,11 @@ static void requestParse(struct Request* request, const char* requestFragment, s
 				}
 				break;
             case RequestParseStateBody:
-                request->body.contents[request->body.length] = c;
-                request->body.length++;
-                if (request->body.length == request->body.capacity) {
+				/* Copy the request body into request->body - the .length is from Content-Length so don't trust that (found with afl-fuzz!) */
+				if (request->body.length < request->body.capacity) {
+					request->body.contents[request->body.length] = c;
+					request->body.length++;
+				} else if (request->body.length == request->body.capacity) {
                     request->state = RequestParseStateDone;
                 }
                 break;
