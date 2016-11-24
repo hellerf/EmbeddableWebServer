@@ -468,10 +468,11 @@ static char* strdupEscapeForURL(const char* stringToEscape) {
     heapStringInit(&escapedString);
     const char* p = stringToEscape;
     while ('\0' != *p) {
-        bool isULetter = *p <= 'Z' && *p >= 'A';
-        bool isLLetter = *p <= 'z' && *p >= 'a';
-        bool isNumber = *p <= '0' && *p >= '9';
-        if (isULetter || isLLetter || isNumber) {
+        bool isULetter = *p >= 'A' && *p <= 'Z';
+        bool isLLetter = *p >= 'a' && *p <= 'z';
+        bool isNumber = *p >= '0' && *p <= '9';
+		bool isAcceptablePunctuation = ('.' == *p || '/' == *p || '-' == *p);
+		if (isULetter || isLLetter || isNumber || isAcceptablePunctuation) {
             heapStringAppendChar(&escapedString, *p);
         } else {
             // huh I guess %02x doesn't work in Windows?? holy cow
