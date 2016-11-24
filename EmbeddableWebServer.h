@@ -2037,7 +2037,12 @@ static int pathInformationGet(const char* path, struct PathInformation* info) {
 		return 1;
 	}
 	free(widePath);
-	info->exists = true;
+	/* If it's a hidden or system file, pretend it doesn't exist */
+	if (attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) {
+		info->exists = false;
+	} else {
+		info->exists = true;
+	}
 	if (attributes & FILE_ATTRIBUTE_DIRECTORY) {
 		info->isDirectory = true;
 	} else {
