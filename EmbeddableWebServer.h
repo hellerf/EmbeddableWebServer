@@ -46,6 +46,8 @@ static bool OptionPrintWholeRequest = false;
 static bool OptionIncludeStatusPageAndCounters = true;
 /* If using responseAllocServeFileFromRequestPath and no index.html is found, serve up the directory */
 static bool OptionListDirectoryContents = true;
+/* Print the entire server response to every request */
+static bool OptionPrintResponse = false;
 
 /* These bound the memory used by a request. The headers used to be dynamically allocated but I've made them hard coded because: 1. Memory used by a request should be bounded 2. It was responsible for 2 * headersCount allocations every request */
 #define REQUEST_MAX_HEADERS 64
@@ -98,6 +100,7 @@ typedef SOCKET sockettype;
 #include <ifaddrs.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <strings.h>
 typedef int sockettype;
 #define WINDOWS_STDCALL
 #define THREAD_RETURN_TYPE void*
@@ -1401,7 +1404,10 @@ static int sendResponseBody(struct Connection* connection, const struct Response
                errno);
         return -1;
     }
-    *bytesSent = *bytesSent + sendResult;
+	if (OptionPrintResponse) {
+		fwrite(connection->responseHeader, 1, headerLength, stdout);
+	}
+	*bytesSent = *bytesSent + sendResult;
     /* Second, if a response body exists, send that */
     if (response->body.length > 0) {
         sendResult = send(connection->socketfd, response->body.contents, response->body.length, 0);
@@ -1470,24 +1476,17 @@ static int sendResponseFile(struct Connection* connection, const struct Response
     }
     
     /* now we have the file length + MIME TYpe and we can send the header */
-    headerLength = snprintf(connection->responseHeader,
-                            sizeof(connection->responseHeader),
-                            "HTTP/1.0 %d %s\r\n"
-                            "Content-Type: %s\r\n"
-                            "Content-Length: %ld\r\n"
-                            "Server: Embeddable Web Server/" EMBEDDABLE_WEB_SERVER_VERSION_STRING "\r\n"
-                            "\r\n",
-                            response->code,
-                            response->status,
-                            contentType,
-                            fileLength);
+	headerLength = snprintfResponseHeader(connection->responseHeader, sizeof(connection->responseHeader), response->code, response->status, contentType, response->extraHeaders, fileLength);
     sendResult = send(connection->socketfd, connection->responseHeader, headerLength, 0);
     if (sendResult != headerLength) {
         ews_printf("Unable to satisfy request for '%s' because we could not send the HTTP header '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
         result = 1;
         goto exit;
     }
-    *bytesSent = sendResult;
+	if (OptionPrintResponse) {
+		fwrite(connection->responseHeader, 1, headerLength, stdout);
+	}
+	*bytesSent = sendResult;
     /* read the whole file, just buffering into the connection buffer, and sending it out to the socket */
     while (!feof(fp)) {
         size_t bytesRead = fread(connection->sendRecvBuffer, 1, sizeof(connection->sendRecvBuffer), fp);
@@ -1506,6 +1505,10 @@ static int sendResponseFile(struct Connection* connection, const struct Response
             result = 1;
             goto exit;
         }
+		if (OptionPrintResponse) {
+			fwrite(connection->sendRecvBuffer, 1, bytesRead, stdout);
+		}
+
         *bytesSent = *bytesSent + sendResult;
     }
 exit:
