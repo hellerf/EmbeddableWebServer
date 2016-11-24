@@ -200,20 +200,6 @@ struct Connection {
     struct Server* server;
 };
 
-/* these counters exist solely for the purpose of the /status demo */
-static struct Counters {
-    bool lockInitialized;
-    pthread_mutex_t lock;
-    int64_t bytesReceived;
-	int64_t bytesSent;
-	int64_t totalConnections;
-	int64_t activeConnections;
-	int64_t heapStringAllocations;
-	int64_t heapStringReallocations;
-	int64_t heapStringFrees;
-	int64_t heapStringTotalBytesReallocated;
-} counters;
-
 /* You create one of these for the server to send. Use one of the responseAlloc functions.
  You can fill out the body field using the heapString* functions. You can also specify a
  filenameToSend which will be sent using regular file streaming. This is so you don't have
@@ -314,9 +300,25 @@ int serverMutexUnlock(struct Server* server);
 /* runs quick unit tests in the demo app */
 void EWSUnitTestsRun(void);
 
+
 #ifndef EWS_HEADER_ONLY
 
 /* Internal implementation stuff */
+
+/* these counters exist solely for the purpose of the /status demo */
+static struct Counters {
+	bool lockInitialized;
+	pthread_mutex_t lock;
+	int64_t bytesReceived;
+	int64_t bytesSent;
+	int64_t totalConnections;
+	int64_t activeConnections;
+	int64_t heapStringAllocations;
+	int64_t heapStringReallocations;
+	int64_t heapStringFrees;
+	int64_t heapStringTotalBytesReallocated;
+} counters;
+
 #ifndef MIN
 #define MIN(a, b) ((a < b) ? a : b)
 #endif
