@@ -116,7 +116,9 @@ typedef enum  {
     RequestParseStateCRLF,
     RequestParseStateCRLFCR,
     RequestParseStateBody,
-    RequestParseStateDone
+	RequestParseStateEatHeaders,
+    RequestParseStateDone,
+	RequestParseStateBadRequest
 } RequestParseState;
 
 /* just a calloc'd C string on the heap */
@@ -336,7 +338,7 @@ struct PathInformation {
 
 static void responseFree(struct Response* response);
 static void printIPv4Addresses(uint16_t portInHostOrder);
-static struct Connection* connectionAlloc();
+static struct Connection* connectionAlloc(struct Server* server);
 static void connectionFree(struct Connection* connection);
 static void requestParse(struct Request* request, const char* requestFragment, size_t requestFragmentLength);
 static int acceptConnectionsUntilStoppedInternal(struct Server* server, const struct sockaddr* address, socklen_t addressLength);
@@ -1163,6 +1165,14 @@ static void responseFree(struct Response* response) {
     free(response);
 }
 
+static RequestParseState stateHeaderNameIfSpaceLeft(const struct Request* request) {
+	/* Only grab another header if we have space for it. This was revealed to be open for attack by afl-fuzz! */
+	if (request->headersCount < REQUEST_MAX_HEADERS) {
+		return RequestParseStateHeaderName;
+	}
+	return RequestParseStateEatHeaders;
+}
+
 /* parses a typical HTTP request looking for the first line: GET /path HTTP/1.0\r\n */
 static void requestParse(struct Request* request, const char* requestFragment, size_t requestFragmentLength) {
     for (size_t i = 0; i < requestFragmentLength; i++) {
@@ -1201,60 +1211,61 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                 }
                 break;
             case RequestParseStateHeaderName:
+				assert(request->headersCount < REQUEST_MAX_HEADERS && "Parsing the request header name assumes we have space for more headers");
                 if (c == ':') {
-                    request->state = RequestParseStateHeaderValue;
+					if (request->headers[request->headersCount].name.length > 0) {
+						request->state = RequestParseStateHeaderValue;
+					} else {
+						request->state = RequestParseStateBadRequest;
+					}
                 } else if (c == '\r') {
                     request->state = RequestParseStateCR;
                 } else {
-                    if (request->headersCount < REQUEST_MAX_HEADERS) {
-                        /* if this is the first character in this header name, then initialize the string pool */
-                        if (NULL == request->headers[request->headersCount].name.contents) {
-                            poolStringStartNewString(&request->headers[request->headersCount].name, request);
-                        }
-                        /* store the header name in the string pool */
-                        poolStringAppendChar(request, &request->headers[request->headersCount].name, c);
-                    } else {
-                        request->warnings.headersTooManyDropped = true;
-                    }
+					/* if this is the first character in this header name, then initialize the string pool */
+					if (NULL == request->headers[request->headersCount].name.contents) {
+						poolStringStartNewString(&request->headers[request->headersCount].name, request);
+					}
+					/* store the header name in the string pool */
+					poolStringAppendChar(request, &request->headers[request->headersCount].name, c);
                 }
                 break;
             case RequestParseStateHeaderValue:
-                /* skip the first space if we are saving this to header */
-                if (c == ' ' && request->headersCount < REQUEST_MAX_HEADERS && request->headers[request->headersCount].value.length == 0) {
+				assert(request->headersCount < REQUEST_MAX_HEADERS && "Parsing the request header value assumes we have space for more headers");
+				/* skip the first space if we are saving this to header */
+                if (c == ' ' && request->headers[request->headersCount].value.length == 0) {
 					/* if we are out of headers, just forget about it. We don't care if we skip the space or not */
                 } else if (c == '\r') {
-                    if (request->headersCount < REQUEST_MAX_HEADERS) {
-                        /* only go to the next header if we were able to fill this one out */
-                        if (request->headers[request->headersCount].value.length > 0) {
-                            request->headersCount++;
-                        }
-                    }
+					/* only go to the next header if we were able to fill this one out */
+					if (request->headers[request->headersCount].value.length > 0) {
+						request->headersCount++;
+					}
                     request->state = RequestParseStateCR;
                 } else {
-                    if (request->headersCount < REQUEST_MAX_HEADERS) {
-                        /* if this is the first character in this header name, then initialize the string pool */
-                        if (NULL == request->headers[request->headersCount].value.contents) {
-                            poolStringStartNewString(&request->headers[request->headersCount].value, request);
-                        }
-                        /* store the header name in the string pool */
-                        poolStringAppendChar(request, &request->headers[request->headersCount].value, c);
-                    }
+					assert(request->headersCount < REQUEST_MAX_HEADERS && "Parsing the request header value assumes we have space for more headers");
+					/* if this is the first character in this header name, then initialize the string pool */
+					if (NULL == request->headers[request->headersCount].value.contents) {
+						poolStringStartNewString(&request->headers[request->headersCount].value, request);
+					}
+					/* store the header name in the string pool */
+					poolStringAppendChar(request, &request->headers[request->headersCount].value, c);
                 }
                 break;
             case RequestParseStateCR:
                 if (c == '\n') {
                     request->state = RequestParseStateCRLF;
                 } else {
-                    request->state = RequestParseStateHeaderName;
+					request->state = stateHeaderNameIfSpaceLeft(request);
                 }
                 break;
             case RequestParseStateCRLF:
                 if (c == '\r') {
                     request->state = RequestParseStateCRLFCR;
                 } else {
-                    request->state = RequestParseStateHeaderName;
-                    /* this is the first character of the header - replay the HeaderName case so this character gets appended */
-                    i--;
+					request->state = stateHeaderNameIfSpaceLeft(request);
+					if (RequestParseStateHeaderName == request->state) {
+						/* this is the first character of the header - replay the HeaderName case so this character gets appended */
+						i--;
+					}
                 }
                 break;
             case RequestParseStateCRLFCR:
@@ -1285,9 +1296,15 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                     } else {
                     }
                 } else {
-                    request->state = RequestParseStateHeaderName;
+					request->state = stateHeaderNameIfSpaceLeft(request);
                 }
                 break;
+			case RequestParseStateEatHeaders:
+				/* we have no more room for headers right now */
+				if (c == '\r') {
+					request->state = RequestParseStateCR;
+				}
+				break;
             case RequestParseStateBody:
                 request->body.contents[request->body.length] = c;
                 request->body.length++;
@@ -1300,6 +1317,8 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                     request->warnings.bodyTruncated = true;
                 }
                 break;
+			case RequestParseStateBadRequest:
+				break;
         }
     }
 }
