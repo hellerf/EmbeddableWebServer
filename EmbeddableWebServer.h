@@ -25,7 +25,8 @@ Tips:
 * Use the heapStringAppend*(&response->body) functions to dynamically build a body (see the HTML form POST demo)
 * Gain extra debugging by enabling ews_print_debug
 * If you want a clean server shutdown you can use serverInit() + acceptConnectionsUntilStopped() + serverDeInit()
-* To include the file in multiple .c files use EWS_HEADER_ONLY in all places but one. This is the opposite of STB_IMPLEMENTATION ;-)
+* To include the file in multiple .c files use EWS_HEADER_ONLY in all places but one. This is the opposite of STB_IMPLEMENTATION if you
+  are familiar with the STB libraries
 */
 
 /* You can turn these prints on/off.  ews_printf generally prints warnings + errors while ews_print_debug prints mundane information */
@@ -1413,14 +1414,19 @@ static int sendResponseBody(struct Connection* connection, const struct Response
                    errno);
             return -1;
         }
-        *bytesSent = *bytesSent + sendResult;
+		if (OptionPrintResponse) {
+			fwrite(response->body.contents, 1, response->body.length, stdout);
+		}
+		*bytesSent = *bytesSent + sendResult;
     }
     return 0;
 }
 
 static int sendResponseFile(struct Connection* connection, const struct Response* response, ssize_t* bytesSent) {
-    /* For high performance we really want to use sendfile. However I want the code to work on Windows
-     and we really don't need that level of performance right now. */
+    /* If you were writing a high-performance web server you could use 
+	sendfile, memory map the file, or any number of exciting things. But
+	here we just fread the first 100 bytes to figure out MIME type, then rewind
+	and send the file ~16KB at a time. */
     struct Response* errorResponse = NULL;
 	FILE* fp = fopen_utf8_path(response->filenameToSend, "rb");
     int result = 0;
