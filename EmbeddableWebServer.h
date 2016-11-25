@@ -1727,7 +1727,7 @@ static THREAD_RETURN_TYPE WINDOWS_STDCALL connectionHandlerThread(void* connecti
 			foundRequest = true;
 		}
 #endif
-		if (connection->request.state = RequestParseStateBadRequest) {
+		if (RequestParseStateBadRequest == connection->request.state) {
 			ews_printf("Bad request found from %s:%s\n", connection->remoteHost, connection->remotePort);
 			break;
 		}
