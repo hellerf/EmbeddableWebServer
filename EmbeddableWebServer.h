@@ -117,8 +117,7 @@ typedef enum  {
     RequestParseStateCRLFCR,
     RequestParseStateBody,
 	RequestParseStateEatHeaders,
-    RequestParseStateDone,
-	RequestParseStateBadRequest
+    RequestParseStateDone
 } RequestParseState;
 
 /* just a calloc'd C string on the heap */
@@ -167,7 +166,7 @@ struct Request {
         /* Was some header information discarded because there was not enough room in the pool? */
         bool headersStringPoolExhausted;
         /* Were there simply too many headers in this request for us to handle them all? */
-        bool headersTooManyDropped;
+        bool tooManyHeaders;
         /* request line strings truncated? */
         bool methodTruncated;
         bool versionTruncated;
@@ -805,8 +804,8 @@ struct HeapString connectionDebugStringCreate(const struct Connection* connectio
         heapStringAppendString(&debugString, "headersStringPoolExhausted - try upping REQUEST_HEADERS_MAX_MEMORY\n");
         hadWarnings = true;
     }
-    if (connection->request.warnings.headersTooManyDropped) {
-        heapStringAppendString(&debugString, "headersTooManyDropped - try upping REQUEST_MAX_HEADERS\n");
+    if (connection->request.warnings.tooManyHeaders) {
+        heapStringAppendString(&debugString, "tooManyHeaders - try upping REQUEST_MAX_HEADERS\n");
         hadWarnings = true;
     }
     if (connection->request.warnings.methodTruncated) {
@@ -841,7 +840,7 @@ static void poolStringStartNewString(struct PoolString* poolString, struct Reque
         return;
     }
     /* the pool string is full - don't initialize anything writable and ensure any writing to this pool string crashes */
-    if (request->headersStringPoolOffset >= REQUEST_HEADERS_MAX_MEMORY - 1) { // -1 is because the last pool string needs to be null-terminated
+	if (request->headersStringPoolOffset >= REQUEST_HEADERS_MAX_MEMORY - 1 - sizeof('\0')) { // we need to store one character (-1) and a null character at the end of the last string sizeof('\0')
         poolString->length = 0;
         poolString->contents = NULL;
         request->warnings.headersStringPoolExhausted = true;
@@ -1165,10 +1164,14 @@ static void responseFree(struct Response* response) {
     free(response);
 }
 
-static RequestParseState stateHeaderNameIfSpaceLeft(const struct Request* request) {
-	/* Only grab another header if we have space for it. This was revealed to be open for attack by afl-fuzz! */
+/* Only grab another header if we have space for it. This was revealed to be open for attack by afl-fuzz! */
+static RequestParseState stateHeaderNameIfSpaceLeft(struct Request* request) {
 	if (request->headersCount < REQUEST_MAX_HEADERS) {
-		return RequestParseStateHeaderName;
+		if (!request->warnings.headersStringPoolExhausted) {
+			return RequestParseStateHeaderName;
+		}
+	} else {
+		request->warnings.tooManyHeaders = true;
 	}
 	return RequestParseStateEatHeaders;
 }
@@ -1212,31 +1215,28 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                 break;
             case RequestParseStateHeaderName:
 				assert(request->headersCount < REQUEST_MAX_HEADERS && "Parsing the request header name assumes we have space for more headers");
-                if (c == ':') {
-					if (request->headers[request->headersCount].name.length > 0) {
-						request->state = RequestParseStateHeaderValue;
-					} else {
-						request->state = RequestParseStateBadRequest;
-					}
-                } else if (c == '\r') {
-                    request->state = RequestParseStateCR;
-                } else {
+				if (c == ':') {
+					request->state = RequestParseStateHeaderValue;
+				} else if (c == '\r') {
+					request->state = RequestParseStateCR;
+				} else  {
 					/* if this is the first character in this header name, then initialize the string pool */
 					if (NULL == request->headers[request->headersCount].name.contents) {
 						poolStringStartNewString(&request->headers[request->headersCount].name, request);
 					}
 					/* store the header name in the string pool */
 					poolStringAppendChar(request, &request->headers[request->headersCount].name, c);
-                }
-                break;
-            case RequestParseStateHeaderValue:
+				}
+				break;
+			case RequestParseStateHeaderValue:
 				assert(request->headersCount < REQUEST_MAX_HEADERS && "Parsing the request header value assumes we have space for more headers");
 				/* skip the first space if we are saving this to header */
                 if (c == ' ' && request->headers[request->headersCount].value.length == 0) {
-					/* if we are out of headers, just forget about it. We don't care if we skip the space or not */
+					/* intentionally skipped */
                 } else if (c == '\r') {
-					/* only go to the next header if we were able to fill this one out */
-					if (request->headers[request->headersCount].value.length > 0) {
+					/* only go to the next header if we were able to fill this one out - it is important to check both,
+					especially in the case of a header like ": safdasdf" */
+					if (request->headers[request->headersCount].value.length > 0 && request->headers[request->headersCount].name.length > 0) {
 						request->headersCount++;
 					}
                     request->state = RequestParseStateCR;
@@ -1319,8 +1319,6 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                     request->warnings.bodyTruncated = true;
                 }
                 break;
-			case RequestParseStateBadRequest:
-				break;
         }
     }
 }
@@ -1329,7 +1327,7 @@ static void requestPrintWarnings(const struct Request* request, const char* remo
     if (request->warnings.headersStringPoolExhausted) {
         ews_printf("Warning: Request from %s:%s exhausted the header string pool so some information will be lost. You can try increasing REQUEST_HEADERS_MAX_MEMORY which is currently %ld bytes\n", remoteHost, remotePort, (long) REQUEST_HEADERS_MAX_MEMORY);
     }
-    if (request->warnings.headersTooManyDropped) {
+    if (request->warnings.tooManyHeaders) {
         ews_printf("Warning: Request from %s:%s had too many headers and we dropped some. You can try increasing REQUEST_MAX_HEADERS which is currently %ld\n", remoteHost, remotePort, (long) REQUEST_MAX_HEADERS);
     }
     if (request->warnings.methodTruncated) {
@@ -1727,10 +1725,6 @@ static THREAD_RETURN_TYPE WINDOWS_STDCALL connectionHandlerThread(void* connecti
 			foundRequest = true;
 		}
 #endif
-		if (RequestParseStateBadRequest == connection->request.state) {
-			ews_printf("Bad request found from %s:%s\n", connection->remoteHost, connection->remotePort);
-			break;
-		}
     }
     requestPrintWarnings(&connection->request, connection->remoteHost, connection->remotePort);
     ssize_t bytesSent = 0;
