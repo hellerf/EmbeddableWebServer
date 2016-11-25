@@ -1414,7 +1414,7 @@ int acceptConnectionsUntilStoppedFromEverywhereIPv4(struct Server* serverOrNULL,
      What you actually want to do is call getaddrinfo on command line arguments
      to let users specify the interface and port */
     struct sockaddr_in anyInterfaceIPv4 = {0};
-    anyInterfaceIPv4.sin_addr.s_addr = INADDR_ANY; // also popular inet_addr("127.0.0.1") which is INADDR_LOOPBACK
+    anyInterfaceIPv4.sin_addr.s_addr = htonl(INADDR_ANY); // also popular inet_addr("127.0.0.1") which is INADDR_LOOPBACK
     anyInterfaceIPv4.sin_family = AF_INET;
     anyInterfaceIPv4.sin_port = htons(portInHostOrder);
 	return acceptConnectionsUntilStopped(serverOrNULL, (struct sockaddr*) &anyInterfaceIPv4, sizeof(anyInterfaceIPv4));
