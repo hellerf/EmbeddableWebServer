@@ -258,9 +258,11 @@ http://55.55.55.55/release/current and be served /var/root/www/release-5.0.0 */
 struct Response* responseAllocServeFileFromRequestPath(const char* pathPrefix, const char* requestPath, const char* requestPathDecoded, const char* documentRoot);
 /* You can use heapStringAppend*(&response->body) to dynamically generate the body */
 struct Response* responseAllocHTML(const char* html);
+struct Response* responseAllocHTMLWithFormat(const char* format, ...) __printflike(1, 0);
 struct Response* responseAllocHTMLWithStatus(int code, const char* status, const char* html);
 struct Response* responseAllocJSON(const char* json);
 struct Response* responseAllocJSONWithStatus(int code, const char* status, const char* json);
+struct Response* responseAllocJSONWithFormat(const char* format, ...) __printflike(1, 0);
 struct Response* responseAllocWithFormat(int code, const char* status, const char* contentType, const char* format, ...) __printflike(3, 0);
 /* If you leave the MIMETypeOrNULL NULL, the MIME type will be auto-detected */
 struct Response* responseAllocWithFile(const char* filename, const char* MIMETypeOrNULL);
@@ -886,6 +888,15 @@ struct Response* responseAllocHTML(const char* html) {
     return responseAllocHTMLWithStatus(200, "OK", html);
 }
 
+struct Response* responseAllocHTMLWithFormat(const char* format, ...) {
+	struct Response* response = responseAlloc(200, "OK", "text/html; charset=UTF-8", 0);
+	va_list ap;
+	va_start(ap, format);
+	heapStringAppendFormatV(&response->body, format, ap);
+	va_end(ap);
+	return response;
+}
+
 struct Response* responseAllocHTMLWithStatus(int code, const char* status, const char* html) {
     struct Response* response = responseAlloc(200, "OK", "text/html; charset=UTF-8", 0);
     heapStringSetToCString(&response->body, html);
@@ -894,6 +905,15 @@ struct Response* responseAllocHTMLWithStatus(int code, const char* status, const
 
 struct Response* responseAllocJSON(const char* json) {
     return responseAllocJSONWithStatus(200, "OK", json);
+}
+
+struct Response* responseAllocJSONWithFormat(const char* format, ...) {
+	struct Response* response = responseAlloc(200, "OK", "application/json", 0);
+	va_list ap;
+	va_start(ap, format);
+	heapStringAppendFormatV(&response->body, format, ap);
+	va_end(ap);
+	return response;
 }
 
 struct Response* responseAllocJSONWithStatus(int code, const char* status, const char* json) {
