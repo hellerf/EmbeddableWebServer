@@ -391,8 +391,7 @@ static int snprintfResponseHeader(char* destination, size_t destinationCapacity,
 
 #ifdef EWS_FUZZ_TEST
 #define recv(socket, buffer, bufferLength, flags) read(socket, buffer, bufferLength)
-#define send(socket, buffer, bufferLength, flags) 0
-//write(socket, buffer, bufferLength)
+#define send(socket, buffer, bufferLength, flags) write(STDOUT_FILENO, buffer, bufferLength)
 #endif
 
 static THREAD_RETURN_TYPE STDCALL_ON_WIN32 connectionHandlerThread(void* connectionPointer);
