@@ -31,6 +31,10 @@ STB_IMPLEMENTATION if you are familiar with the STB libraries
 #include "EmbeddableWebServer.h"
 #include <time.h>
 
+#ifdef WIN32
+#pragma comment(lib, "ws2_32") // link against Winsock on Windows
+#endif
+
 static struct Server server;
 static THREAD_RETURN_TYPE STDCALL_ON_WIN32 acceptConnectionsThread(void* unusedParam) {
 	serverInit(&server);
@@ -49,6 +53,8 @@ int main() {
 	pthread_t threadHandle;
 	pthread_create(&threadHandle, NULL, &acceptConnectionsThread, NULL);
 	// rest of the program
+	while (1) {
+	}
 	return 0;
 }
 */
