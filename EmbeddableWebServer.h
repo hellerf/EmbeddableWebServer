@@ -392,6 +392,7 @@ static int snprintfResponseHeader(char* destination, size_t destinationCapacity,
 #ifdef EWS_FUZZ_TEST
 #define recv(socket, buffer, bufferLength, flags) read(socket, buffer, bufferLength)
 #define send(socket, buffer, bufferLength, flags) write(STDOUT_FILENO, buffer, bufferLength)
+#define CHECK_SERVED_FILES_WITH_REALPATH 
 #endif
 
 static THREAD_RETURN_TYPE STDCALL_ON_WIN32 connectionHandlerThread(void* connectionPointer);
@@ -1070,7 +1071,26 @@ struct Response* responseAllocServeFileFromRequestPath(const char* pathPrefix, c
         struct Response* response = responseAlloc404NotFoundHTML(filePath.contents);
 		heapStringFreeContents(&filePath);
 		return response;
-    }
+	}
+#ifdef CHECK_SERVED_FILES_WITH_REALPATH
+#ifdef WIN32
+#error CHECKS_SERVED_FILES_WITH_REALPATH will not work in WIN32 because Windows does not support realpath
+#endif
+	char* filePathResolved = realpath(filePath.contents, NULL);
+	if (NULL == filePathResolved) {
+		printf("Warning: The file path '%s' could not be resolved with realpath. %s = %d\n", filePath.contents, strerror(errno), errno);
+	}
+	char* documentRootResolved = realpath(documentRoot, NULL);
+	if (NULL == documentRootResolved) {
+		printf("Warning: Your documentRoot '%s' could not be resolved with realpath. %s = %d\n", documentRoot, strerror(errno), errno);
+	}
+	ews_printf_debug("Resolved documentRoot to '%s' and file path to '%s'\n", documentRoot, filePath.contents);
+	if (strlen(filePathResolved) < strlen(documentRootResolved)) {
+		ews_printf("Error: the filePath '%s' from requestPathDecoded '%s' requestPathSuffix '%s' escapes documentRoot '%s'. The requestPathSuffix realpath's to '%s' and the documentRoot realpath's to '%s'\n",
+			filePath.contents, requestPathDecoded, requestPathSuffix, documentRoot, filePathResolved, documentRootResolved);
+	}
+#endif
+
 	if (pathInfo.isDirectory) {
 		if (!OptionListDirectoryContents) {
 			ews_printf("Failed to serve directory: OptionListDirectoryContents is false so we aren't serving the directory contents/listing for request '%s' documentRoot '%s', pointing at dir '%s'\n", requestPathDecoded, documentRoot, filePath.contents);
