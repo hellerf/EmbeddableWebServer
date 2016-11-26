@@ -1,6 +1,8 @@
-/* Copyright © 2016 Forrest Heller. Released under the 2-clause BSD license in EmbeddableWebServer.h */
+/* Copyright 2016 Forrest Heller. Released under the 2-clause BSD license in EmbeddableWebServer.h */
 
-/* This is a demo for the Embeddable Web Server. See EmbedabbleWebServer.h for more information */
+/* This is a demo for the Embeddable Web Server. See EmbedabbleWebServer.h and the README for smaller
+examples. EWS code in general is written for Linux and Mac OS X and puts the burden of emulation on
+Windows, rather than emulating Linux/OS X interfaces. */
 
 #include "EmbeddableWebServer.h"
 
