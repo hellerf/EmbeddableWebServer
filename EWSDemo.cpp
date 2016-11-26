@@ -83,8 +83,10 @@ struct Response* createResponseForRequest(const struct Request* request, struct 
 															"<a href=\"/random_streaming\">Chunked Streaming / Custom Connection Handling</a><br>"
 															"<a href=\"/form_post_demo\">HTML Form POST Demo</a><br>"
 															"<a href=\"/form_get_demo\">HTML Form GET Demo</a><br>"
-                                                            "<a href=\"/json_status_example\">JSON status example</a><br>"
-                                                            "<a href=\"/about\">About</a>"
+															"<a href=\"/json_status_example\">JSON status example</a><br>"
+															"<a href=\"/json_hit_counter\">JSON hit counter</a><br>"
+															"<a href=\"/html_hit_counter\">HTML hit counter</a><br>"
+															"<a href=\"/about\">About</a><br>"
                                                             "<h2>Connection Debug Info</h2><pre>%s</pre>"
                                                             "</body></html>",
                                                             EMBEDDABLE_WEB_SERVER_VERSION_STRING,
@@ -227,8 +229,45 @@ struct Response* createResponseForRequest(const struct Request* request, struct 
     }
     
     if (request->path == strstr(request->path, "/about")) {
-        return responseAllocHTML("<html><head><title>About</title><body>Embeddable Web Server version " EMBEDDABLE_WEB_SERVER_VERSION_STRING " by Forrest Heller</body></html>");
+		return responseAllocHTMLWithFormat("<html><head><title>About</title><body>Embeddable Web Server version %s by Forrest Heller</body></html>", EMBEDDABLE_WEB_SERVER_VERSION_STRING);
     }
+
+	if (request->path == strstr(request->path, "/json_hit_counter")) {
+		serverMutexLock(connection->server);
+		long count = 0;
+		FILE* fp = fopen("EWSDemoFiles/hitcounter.txt", "rb");
+		if (NULL != fp) {
+			fscanf(fp, "%ld", &count);
+			fclose(fp);
+		}
+		count++;
+		fp = fopen("EWSDemoFiles/hitcounter.txt", "wb");
+		fprintf(fp, "%ld", count);
+		fclose(fp);
+		serverMutexUnlock(connection->server);
+		return responseAllocJSONWithFormat("{ \"hits\" : %ld }", count);
+	}
+
+	if (request->path == strstr(request->path, "/html_hit_counter")) {
+		serverMutexLock(connection->server);
+		long count = 0;
+		FILE* fp = fopen("EWSDemoFiles/hitcounter.txt", "rb");
+		if (NULL != fp) {
+			fscanf(fp, "%ld", &count);
+			fclose(fp);
+		}
+		count++;
+		fp = fopen("EWSDemoFiles/hitcounter.txt", "wb");
+		fprintf(fp, "%ld", count);
+		fclose(fp);
+		serverMutexUnlock(connection->server);
+		return responseAllocHTMLWithFormat("<html><head><title>Hit Counter</title></head><body>"
+			"<a href=\"/\">Home</a><br>"
+			"Hit counters were popular on web pages in the late 1990s + early 2000s. Every time someone loaded your web page the hit counter would increase. People had lots of different styles of hit counter with rolling images and animations. It was fun.<br>"
+			"<font family=\"Comic Sans MS\" color=\"purple\" size=\"+10\"><b>%ld</b></font>"
+			"</body></html>",
+			count);
+	}
 
 	/* This is an example of how you can take over the HTTP and do whatever you want */
     if (request->path == strstr(request->path, "/random_streaming")) {
