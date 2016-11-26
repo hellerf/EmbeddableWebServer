@@ -16,6 +16,7 @@ If you want to control server setup/teardown use `serverInit`, `serverStop`, and
 
 ## Quick Example ##
 	#include "EmbeddableWebServer.h"
+	#pragma comment(lib, "ws2_32")
 
 	int main(int argc, char* argv[]) {
 		return acceptConnectionsUntilStoppedFromEverywhereIPv4(NULL, 8080);
@@ -31,10 +32,11 @@ If you want to control server setup/teardown use `serverInit`, `serverStop`, and
 			return responseAllocWithFormat(200, "OK", "application/json", "{ \"status\" : \"%s\" }", statuses[status]);
 		}
 		if (0 == strcmp(request->pathDecoded, "/100_random_numbers")) {
-			struct Response* response = responseAllocHTML("<html><body><h1>100 Random Numbers</ul><ol>");
+			struct Response* response = responseAllocHTML("<html><body><h1>100 Random Numbers</h1><ol>");
 			for (int i = 1; i <= 100; i++) {
 				heapStringAppendFormat(&response->body, "<li>%d</li>\n", rand());
 			}
+			heapStringAppendString(&response->body, "</ol></body></html>");
 			return response;
 		}
 		/* Serve files from the current directory */
@@ -62,6 +64,11 @@ The server is implemented in a thread-per-connection model. This way you can do 
 Since EWS uses threads we need to have a way to launch threads on all platforms. pthreads are supported on most of the operating systems this targets. Hence, EWS targets pthreads directly. EWS includes a very light wrapper for pthreads that supports thread creation, mutexes, and condition variables.
 
 ## Example of launching a server thread from your app ##
+    #include "EmbeddableWebServer.h"
+    #ifdef WIN32
+    #pragma comment(lib, "ws2_32") // link against Winsock on Windows
+    #endif
+
     static int counter = 0;
     static struct Server server;
     static THREAD_RETURN_TYPE STDCALL_ON_WIN32 acceptConnectionsThread(void* unusedParam) {
