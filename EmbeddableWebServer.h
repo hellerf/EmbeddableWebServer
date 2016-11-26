@@ -411,6 +411,7 @@ static int snprintfResponseHeader(char* destination, size_t destinationCapacity,
 	#define strdup(string) _strdup(string)
 	#define unlink(file) _unlink(file)
 	#define close(x) closesocket(x)
+	#define gai_strerror(x) gai_strerrorA(x)
 #endif // Linux/Mac OS X
 
 #ifdef EWS_FUZZ_TEST
