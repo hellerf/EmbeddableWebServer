@@ -18,16 +18,34 @@ response once it's been sent. See the EWSDemo.c file for more examples. </p>
 <h2>Quick Example</h2>
 
 <pre><code>#include "EmbeddableWebServer.h"
+#pragma comment(lib, "ws2_32")
 
-int main(int argc, const char* argv[]) {
+int main(int argc, char* argv[]) {
     return acceptConnectionsUntilStoppedFromEverywhereIPv4(NULL, 8080);
 }
 
 struct Response* createResponseForRequest(const struct Request* request, struct Connection* connection) {
     if (0 == strcmp(request-&gt;pathDecoded, "/welcome")) {
-        return responseAllocWithHTML("&lt;marquee&gt;Welcome to my website&lt;/marquee&gt;");
+        return responseAllocHTML("&lt;html&gt;&lt;body&gt;&lt;marquee&gt;&lt;h1&gt;Welcome to my home page&lt;/h1&gt;&lt;/marquee&gt;&lt;/body&gt;&lt;/html&gt;");
     }
-    return responseAlloc404NotFoundHTML(NULL);
+    if (0 == strcmp(request-&gt;pathDecoded, "/status/json")) {
+        static const char* statuses[] = { ":-)", ":-(", ":-|" };
+        int status = rand() % (sizeof(statuses) / sizeof(*statuses));
+        return responseAllocWithFormat(200, "OK", "application/json", "{ \"status\" : \"%s\" }", statuses[status]);
+    }
+    if (0 == strcmp(request-&gt;pathDecoded, "/100_random_numbers")) {
+        struct Response* response = responseAllocHTML("&lt;html&gt;&lt;body&gt;&lt;h1&gt;100 Random Numbers&lt;/h1&gt;&lt;ol&gt;");
+        for (int i = 1; i &lt;= 100; i++) {
+            heapStringAppendFormat(&amp;response-&gt;body, "&lt;li&gt;%d&lt;/li&gt;\n", rand());
+        }
+        heapStringAppendString(&amp;response-&gt;body, "&lt;/ol&gt;&lt;/body&gt;&lt;/html&gt;");
+        return response;
+    }
+    /* Serve files from the current directory */
+    if (request-&gt;pathDecoded == strstr(request-&gt;pathDecoded, "/files")) {
+        return responseAllocServeFileFromRequestPath("/files", request-&gt;path, request-&gt;pathDecoded, ".");
+    }
+    return responseAlloc404NotFoundHTML("What?!");
 }
 </code></pre>
 
@@ -35,8 +53,8 @@ struct Response* createResponseForRequest(const struct Request* request, struct 
 
 <ul>
 <li>Serve a debug page/dashboard for your application </li>
-<li>Handle HTTP GET and POST forms</li>
-<li>Instead of using regular IPC (Inter-process Communication), use HTTP + JSON</li>
+<li>Handle HTTP GET + POST forms</li>
+<li>Serve up websites for embedded touch display panels</li>
 <li>Mix dynamic request handlers with static content</li>
 <li>Seamless emoji support: Handles UTF-8 and international files, even on Windows (run the demo)</li>
 <li>Quickly print out the whole request contents for debugging an HTTP API client</li>
@@ -44,15 +62,51 @@ struct Response* createResponseForRequest(const struct Request* request, struct 
 
 <h2>Warning</h2>
 
-<p>This server is suitable for controlled applications which will not be accessed over the general Internet. If you put this on the general Internet I can't giuaruntee your security. If you are determined to put this in front of the Internet I advise you to use a proxy server in front (like haproxy, squid, or nginx).</p>
+<p>This server is suitable for controlled applications which will not be accessed over the general Internet. If you are determined to put this in front of the Internet I advise you to use a proxy server in front (like haproxy, squid, or nginx). However I did spend half a day fuzzing it with afl-fuzz and fixed a couple crashers...</p>
 
 <h2>Implementation</h2>
 
-<p>The server is implemented in a thread-per-connection model. This way you can do slow, hacky things in a request and not stall other requests. On the other hand you will use ~40KB + response body + request body of memory per connection. All strings are assumed to be UTF-8. On Windows, UTF-8 file paths are converted to their wide-character (wchar_t) equivalent.</p>
+<p>The server is implemented in a thread-per-connection model. This way you can do slow, hacky things in a request and not stall other requests. On the other hand you will use ~40KB + response body + request body of memory per connection. All strings are assumed to be UTF-8. On Windows, UTF-8 file paths are converted to their wide-character (wchar_t) equivalent so you can serve files with Chinese characters and so on.</p>
+
+<h2>pthreads wrapper for Windows</h2>
+
+<p>Since EWS uses threads we need to have a way to launch threads on all platforms. pthreads are supported on most of the operating systems this targets. Hence, EWS targets pthreads directly. EWS includes a very light wrapper for pthreads that supports thread creation, mutexes, and condition variables.</p>
+
+<h2>Example of launching a server thread from your app</h2>
+
+<pre><code>#include "EmbeddableWebServer.h"
+#ifdef WIN32
+#pragma comment(lib, "ws2_32") // link against Winsock on Windows
+#endif
+
+static int counter = 0;
+static struct Server server;
+static THREAD_RETURN_TYPE STDCALL_ON_WIN32 acceptConnectionsThread(void* unusedParam) {
+    serverInit(&amp;server);
+    const uint16_t portInHostOrder = 8080;
+    acceptConnectionsUntilStoppedFromEverywhereIPv4(&amp;server, portInHostOrder);
+    return (THREAD_RETURN_TYPE) 0;
+}
+
+int main() {
+    pthread_t threadHandle;
+    pthread_create(&amp;threadHandle, NULL, &amp;acceptConnectionsThread, NULL);
+    while (1) {
+        counter++;
+    }
+    // rest of the program
+    return 0;
+}
+
+struct Response* createResponseForRequest(const struct Request* request, struct Connection* connection) {
+    return responseAllocHTMLWithFormat("The counter is currently %d\n", counter);
+}
+</code></pre>
 
 <h2>Comparison to other embeddable web servers</h2>
 
 <ul>
 <li><a href="https://github.com/tom-seddon/yhs">yocto HTTP server</a> - yocto has more features (WebSockets, handling deferred requests, custom headers, and can build PNG images on the fly - pretty cool) and lets you spit out the response in pieces. If you want anything custom EWS makes you take over the whole request yourself. yocto also has better MIME type detection. EWS is smaller and handles each connection on a separate thread so one slow response doesn't block the others.</li>
 <li><a href="https://github.com/cesanta/mongoose">Mongoose</a> - mongoose is professionally supported and developed, dual-licensed under GPL and a commercial license you pay for. Mongoose has a huge amount of features. It works with or without an operating system.</li>
+<li><a href="https://realtimelogic.com/products/barracuda-application-server/">Baraccuda</a> - Baraccuda from Real-Time logic is a proprietary web server targetting embedded systems. I think they run with and without an OS and include lots of features like Mongoose does.</li>
 </ul>
