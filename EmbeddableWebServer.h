@@ -14,7 +14,7 @@ Note: If you just want to take connections from a specific inteface/localhost yo
 2. Fill out createResponseForRequest. Use the responseAlloc* functions to return a response or take over the connection
 yourself and return NULL. The easiest way to serve static files is responseAllocServeFileFromRequestPath. The easiest 
 way to serve HTML is responseAllocHTML. The easiest way to serve JSON is responseAllocJSON. The server will free() your
-response once it's been sent. See the EWSDemo.c file for more examples. 
+response once it's been sent. See the README for a quick example and the EWSDemo.cpp file for a more complete demo.
 
 EWS runs on Windows, Linux, and Mac OS X. It currently has no hope of running on a platform without dynamic memory
 allocation. It is *not suitable for Internet serving* because it has not been thoroughly designed+tested for security.
@@ -25,8 +25,32 @@ Tips:
 * Use the heapStringAppend*(&response->body) functions to dynamically build a body (see the HTML form POST demo)
 * Gain extra debugging by enabling ews_print_debug
 * If you want a clean server shutdown you can use serverInit() + acceptConnectionsUntilStopped() + serverDeInit()
-* To include the file in multiple .c files use EWS_HEADER_ONLY in all places but one. This is the opposite of STB_IMPLEMENTATION if you
-  are familiar with the STB libraries
+* To include the file in multiple .c files use EWS_HEADER_ONLY in all places but one. This is the opposite of 
+STB_IMPLEMENTATION if you are familiar with the STB libraries
+* To run a server on a different thread use (even on Windows):
+#include "EmbeddableWebServer.h"
+#include <time.h>
+
+static struct Server server;
+static THREAD_RETURN_TYPE STDCALL_ON_WIN32 acceptConnectionsThread(void* unusedParam) {
+	serverInit(&server);
+	const uint16_t portInHostOrder = 8080;
+	acceptConnectionsUntilStoppedFromEverywhereIPv4(&server, portInHostOrder);
+	return (THREAD_RETURN_TYPE) 0;
+}
+
+struct Response* createResponseForRequest(const struct Request* request, struct Connection* connection) {
+	time_t t;
+	time(&t);
+	return responseAllocHTMLWithFormat("<html><h1>The time is seconds is %ld</h1></html>", t);
+}
+
+int main() {
+	pthread_t threadHandle;
+	pthread_create(&threadHandle, NULL, &acceptConnectionsThread, NULL);
+	// rest of the program
+	return 0;
+}
 */
 
 /* You can turn these prints on/off.  ews_printf generally prints warnings + errors while ews_print_debug prints mundane information */
