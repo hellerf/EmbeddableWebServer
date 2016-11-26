@@ -58,7 +58,34 @@ This server is suitable for controlled applications which will not be accessed o
 ## Implementation ##
 The server is implemented in a thread-per-connection model. This way you can do slow, hacky things in a request and not stall other requests. On the other hand you will use ~40KB + response body + request body of memory per connection. All strings are assumed to be UTF-8. On Windows, UTF-8 file paths are converted to their wide-character (wchar_t) equivalent so you can serve files with Chinese characters and so on.
 
+## pthreads wrapper for Windows ##
+Since EWS uses threads we need to have a way to launch threads on all platforms. pthreads are supported on most of the operating systems this targets. Hence, EWS targets pthreads directly. EWS includes a very light wrapper for pthreads that supports thread creation, mutexes, and condition variables.
+
+## Example of launching a server thread from your app ##
+    static int counter = 0;
+    static struct Server server;
+    static THREAD_RETURN_TYPE STDCALL_ON_WIN32 acceptConnectionsThread(void* unusedParam) {
+        serverInit(&server);
+        const uint16_t portInHostOrder = 8080;
+        acceptConnectionsUntilStoppedFromEverywhereIPv4(&server, portInHostOrder);
+        return (THREAD_RETURN_TYPE) 0;
+    }
+
+    int main() {
+        pthread_t threadHandle;
+        pthread_create(&threadHandle, NULL, &acceptConnectionsThread, NULL);
+        while (1) {
+            counter++;
+        }
+        // rest of the program
+        return 0;
+    }
+    
+    struct Response* createResponseForRequest(const struct Request* request, struct Connection* connection) {
+        return responseAllocHTMLWithFormat("The counter is currently %d\n", counter);
+    }
 
 ## Comparison to other embeddable web servers ##
 * [yocto HTTP server](https://github.com/tom-seddon/yhs) - yocto has more features (WebSockets, handling deferred requests, custom headers, and can build PNG images on the fly - pretty cool) and lets you spit out the response in pieces. If you want anything custom EWS makes you take over the whole request yourself. yocto also has better MIME type detection. EWS is smaller and handles each connection on a separate thread so one slow response doesn't block the others.
 * [Mongoose](https://github.com/cesanta/mongoose) - mongoose is professionally supported and developed, dual-licensed under GPL and a commercial license you pay for. Mongoose has a huge amount of features. It works with or without an operating system.
+* [Baraccuda](https://realtimelogic.com/products/barracuda-application-server/) - Baraccuda from Real-Time logic is a proprietary web server targetting embedded systems. I think they run with and without an OS and include lots of features like Mongoose does.
