@@ -1059,6 +1059,12 @@ But if the URL does not end in a / we need to do:
 I'll call out this step below
 */
 struct Response* responseAllocServeFileFromRequestPath(const char* pathPrefix, const char* requestPath, const char* requestPathDecoded, const char* documentRoot) {
+	if (NULL == pathPrefix) {
+		ews_printf_debug("responseAllocServeFileFromRequestPath(): The user passed in NULL for pathPrefix so we just defaulted to / for them. Whatever.\n");
+		pathPrefix = "/";
+	}
+	assert(NULL != requestPath && "The requestPath should not be NULL. It can be empty, but not NULL. Pass request->path");
+	assert(NULL != requestPathDecoded && "The requestPathDecoded should not be NULL. It can be empty, but not NULL. Pass request->requestPathDecoded");
 	// Step 1 (see above)
 	size_t matchLength = 0;
 	/* Do we even match this path? Also figure out the suffix (note the use of the _decoded_ path -- otherwise we would have %12s and stuff everywhere */
@@ -2222,7 +2228,11 @@ static void callWSAStartupIfNecessary() {
 	SOCKET testsocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (SOCKET_ERROR == testsocket && WSANOTINITIALISED == WSAGetLastError()) {
 		WSADATA data = { 0 };
-		WSAStartup(MAKEWORD(2, 2), &data);
+		int result = WSAStartup(MAKEWORD(2, 2), &data);
+		if (0 != result) {
+			ews_printf("Calling WSAStartup failed! It returned %d with GetLastError() = %d\n", result, GetLastError());
+			abort();
+		}
 	} else {
 		close(testsocket);
 	}
