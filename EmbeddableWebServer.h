@@ -1646,15 +1646,20 @@ static int sendResponseFile(struct Connection* connection, const struct Response
         errorResponse = responseAlloc404NotFoundHTML(connection->request.path);
         goto exit;
     }
-    assert(sizeof(connection->sendRecvBuffer) >= MIMEReadSize);
-    actualMIMEReadSize = fread(connection->sendRecvBuffer, 1, MIMEReadSize, fp);
-    if (-1 == actualMIMEReadSize) {
-        ews_printf("Unable to satisfy request for '%s' because we could read the first bunch of bytes to determine MIME type '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
-        errorResponse = responseAlloc500InternalErrorHTML("fread for MIME type detection failed");
-        goto exit;
-    }
-    contentType = MIMETypeFromFile(response->filenameToSend, (const uint8_t*) connection->sendRecvBuffer, actualMIMEReadSize);
-	ews_printf_debug("Detected MIME type '%s' for file '%s'\n", contentType, response->filenameToSend);
+	/* If the MIME type if specified in the response->contentType, use that. Otherwise try to guess with MIMETypeFromFile */
+	if (NULL != response->contentType) {
+		contentType = response->contentType;
+	} else {
+		assert(sizeof(connection->sendRecvBuffer) >= MIMEReadSize);
+		actualMIMEReadSize = fread(connection->sendRecvBuffer, 1, MIMEReadSize, fp);
+		if (-1 == actualMIMEReadSize) {
+			ews_printf("Unable to satisfy request for '%s' because we could read the first bunch of bytes to determine MIME type '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+			errorResponse = responseAlloc500InternalErrorHTML("fread for MIME type detection failed");
+			goto exit;
+		}
+		contentType = MIMETypeFromFile(response->filenameToSend, (const uint8_t*)connection->sendRecvBuffer, actualMIMEReadSize);
+		ews_printf_debug("Detected MIME type '%s' for file '%s'\n", contentType, response->filenameToSend);
+	}
     /* get the file length, laboriously checking for errors */
     result = fseek(fp, 0, SEEK_END);
     if (0 != result) {
