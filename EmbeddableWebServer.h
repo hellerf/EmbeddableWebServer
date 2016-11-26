@@ -90,7 +90,7 @@ typedef HANDLE pthread_t;
 typedef CRITICAL_SECTION pthread_mutex_t;
 typedef CONDITION_VARIABLE pthread_cond_t;
 typedef SOCKET sockettype;
-#define WINDOWS_STDCALL WINAPI
+#define STDCALL_ON_WIN32 WINAPI
 #define THREAD_RETURN_TYPE DWORD
 #else
 #include <unistd.h>
@@ -102,7 +102,7 @@ typedef SOCKET sockettype;
 #include <dirent.h>
 #include <strings.h>
 typedef int sockettype;
-#define WINDOWS_STDCALL
+#define STDCALL_ON_WIN32
 #define THREAD_RETURN_TYPE void*
 #endif
 
@@ -393,7 +393,7 @@ static int snprintfResponseHeader(char* destination, size_t destinationCapacity,
 //write(socket, buffer, bufferLength)
 #endif
 
-static THREAD_RETURN_TYPE WINDOWS_STDCALL connectionHandlerThread(void* connectionPointer);
+static THREAD_RETURN_TYPE STDCALL_ON_WIN32 connectionHandlerThread(void* connectionPointer);
 
 typedef enum {
     URLDecodeTypeWholeURL,
@@ -1686,7 +1686,7 @@ exit:
     return result;
 }
 
-static THREAD_RETURN_TYPE WINDOWS_STDCALL connectionHandlerThread(void* connectionPointer) {
+static THREAD_RETURN_TYPE STDCALL_ON_WIN32 connectionHandlerThread(void* connectionPointer) {
     struct Connection* connection = (struct Connection*) connectionPointer;
     getnameinfo((struct sockaddr*) &connection->remoteAddr, connection->remoteAddrLength,
                 connection->remoteHost, sizeof(connection->remoteHost),

@@ -14,7 +14,7 @@ void gettimeofday(struct timeval* tv, const void* unusedTimezone);
 
 static struct Server server = {0};
 
-static THREAD_RETURN_TYPE WINDOWS_STDCALL stopAcceptingConnections(void* u) {
+static THREAD_RETURN_TYPE STDCALL_ON_WIN32 stopAcceptingConnections(void* u) {
     serverStop(&server);
 	return (THREAD_RETURN_TYPE) NULL;
 }
