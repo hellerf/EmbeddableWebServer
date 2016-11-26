@@ -384,7 +384,6 @@ static int pathInformationGet(const char* path, struct PathInformation* info);
 static int sendResponseBody(struct Connection* connection, const struct Response* response, ssize_t* bytesSent);
 static int sendResponseFile(struct Connection* connection, const struct Response* response, ssize_t* bytesSent);
 static int snprintfResponseHeader(char* destination, size_t destinationCapacity, int code, const char* status, const char* contentType, const char* extraHeaders, size_t contentLength);
-#define gai_strerror_ansi(x) gai_strerror(x)
 
 #ifdef WIN32 /* Windows implementations of functions available on Linux/Mac OS X */
 	/* opendir/readdir/closedir API implementation with FindNextFile */
@@ -419,6 +418,8 @@ static int snprintfResponseHeader(char* destination, size_t destinationCapacity,
 	#define unlink(file) _unlink(file)
 	#define close(x) closesocket(x)
 	#define gai_strerror_ansi(x) gai_strerrorA(x)
+#else // WIN32
+	#define gai_strerror_ansi(x) gai_strerror(x)
 #endif // Linux/Mac OS X
 
 #ifdef EWS_FUZZ_TEST
