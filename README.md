@@ -3,14 +3,15 @@ Latest Version: 1.0 released November 23, 2016<br>
 Supported platforms: Linux, Mac OS X, Windows<br>
 License: BSD 2-clause<br>
 
-Embeddable Web Server is a small web server. It contains no dependencies and resides in a single file like the popular [STB](https://github.com/nothings/stb) libraries. It can serve static files and handle responses with C/C++ code. The server will compile in both C and C++. Here's how to use it:
-1. `#include "EmbeddableWebServer.h"` (and `#define EWS_HEADER_ONLY` if you included it somewhere else)
+Embeddable Web Server is a small web server. It contains no dependencies and resides in a single file like the popular [STB](https://github.com/nothings/stb) libraries. It can serve static files and handle responses with C/C++ code. The server will compile in both C and C++. Here's how to use it:<br>
+1. `#include "EmbeddableWebServer.h"` (and `#define EWS_HEADER_ONLY` if you included it somewhere else)<br>
 2. Call `acceptConnectionsUntilStoppedFromEverywhereIPv4(NULL)`, which will initialize a new server and block
-Note: If you want to take connections from a specific inteface/localhost you can use acceptConnectionsUntilStopped
+Note: If you want to take connections from a specific inteface/localhost you can use acceptConnectionsUntilStopped<br>
 3. Fill out `createResponseForRequest`. Use the `responseAlloc*` functions to return a response or take over the connection
 yourself and return NULL. The easiest way to serve static files is responseAllocServeFileFromRequestPath. The easiest 
 way to serve HTML is responseAllocHTML. The easiest way to serve JSON is responseAllocJSON. The server will free() your
-response once it's been sent. See the EWSDemo.c file for more examples. 
+response once it's been sent.
+<br>See the EWSDemo.c file for more examples. 
 
 If you want to control server setup/teardown use `serverInit`, `serverStop`, and `serverDeInit`.
 
