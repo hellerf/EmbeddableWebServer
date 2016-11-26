@@ -1310,7 +1310,8 @@ static void requestParse(struct Request* request, const char* requestFragment, s
 				if (request->body.length < request->body.capacity) {
 					request->body.contents[request->body.length] = c;
 					request->body.length++;
-				} else if (request->body.length == request->body.capacity) {
+				}
+				if (request->body.length == request->body.capacity) {
                     request->state = RequestParseStateDone;
                 }
                 break;
