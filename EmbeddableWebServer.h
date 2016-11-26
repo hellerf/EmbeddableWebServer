@@ -384,6 +384,7 @@ static int pathInformationGet(const char* path, struct PathInformation* info);
 static int sendResponseBody(struct Connection* connection, const struct Response* response, ssize_t* bytesSent);
 static int sendResponseFile(struct Connection* connection, const struct Response* response, ssize_t* bytesSent);
 static int snprintfResponseHeader(char* destination, size_t destinationCapacity, int code, const char* status, const char* contentType, const char* extraHeaders, size_t contentLength);
+#define gai_strerror_ansi(x) gai_strerror(x)
 
 #ifdef WIN32 /* Windows implementations of functions available on Linux/Mac OS X */
 	/* opendir/readdir/closedir API implementation with FindNextFile */
@@ -417,7 +418,7 @@ static int snprintfResponseHeader(char* destination, size_t destinationCapacity,
 	#define strdup(string) _strdup(string)
 	#define unlink(file) _unlink(file)
 	#define close(x) closesocket(x)
-	#define gai_strerror(x) gai_strerrorA(x)
+	#define gai_strerror_ansi(x) gai_strerrorA(x)
 #endif // Linux/Mac OS X
 
 #ifdef EWS_FUZZ_TEST
@@ -1522,7 +1523,7 @@ static int acceptConnectionsUntilStoppedInternal(struct Server* server, const st
     char addressPort[20];
     int nameResult = getnameinfo(address, addressLength, addressHost, sizeof(addressHost), addressPort, sizeof(addressPort), NI_NUMERICHOST | NI_NUMERICSERV);
     if (0 != nameResult) {
-        ews_printf("Warning: Could not get numeric host name and/or port for the address you passed to acceptConnectionsUntilStopped. getnameresult returned %d, which is %s. Not a huge deal but i really should have worked...\n", nameResult, gai_strerror(nameResult));
+        ews_printf("Warning: Could not get numeric host name and/or port for the address you passed to acceptConnectionsUntilStopped. getnameresult returned %d, which is %s. Not a huge deal but i really should have worked...\n", nameResult, gai_strerror_ansi(nameResult));
         strcpy(addressHost, "Unknown");
         strcpy(addressPort, "Unknown");
     }
