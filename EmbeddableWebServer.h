@@ -680,6 +680,7 @@ static void heapStringReallocIfNeeded(struct HeapString* string, size_t minimumC
     assert(string->capacity > 0 && "We are about to allocate a string with 0 capacity. We should have checked this condition above");
     bool previouslyAllocated = string->contents != NULL;
     string->contents = (char*) realloc(string->contents, string->capacity);
+	/* zero out the newly allocated memory */
     memset(&string->contents[string->length], 0, string->capacity - string->length);
     if (OptionIncludeStatusPageAndCounters) {
         pthread_mutex_lock(&counters.lock);
@@ -707,6 +708,7 @@ static void heapStringAppendChar(struct HeapString* string, char c) {
     heapStringReallocIfNeeded(string, string->length + 2);
     string->contents[string->length] = c;
     string->length++;
+	/* this should already be null-terminated but we'll be extra safe for web scale ^_^ */
     string->contents[string->length] = '\0';
 }
 
@@ -2006,7 +2008,9 @@ static void teststrdupHTMLEscape() {
     assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML("< "), "&lt;&nbsp;"));
     assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML("> "), "&gt;&nbsp;"));
     assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML("<a"), "&lt;a"));
-    assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML(">a"), "&gt;a"));
+	assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML(">a"), "&gt;a"));
+	assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML(">a<"), "&gt;a&lt;"));
+	assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML("><"), "&gt;&lt;"));
 }
 
 static void teststrdupEscape() {

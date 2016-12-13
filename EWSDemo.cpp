@@ -289,7 +289,7 @@ struct Response* createResponseForRequest(const struct Request* request, struct 
             return responseAlloc400BadRequestHTML("You specified a bad size_in_bytes. It needs to be positive");
         }
         size_t randomBytesSent = 0;
-        while (randomBytesSent  < sizeInBytes) {
+        while (randomBytesSent < sizeInBytes) {
             size_t bytesToSend = MIN(sizeof(connection->sendRecvBuffer), sizeInBytes - randomBytesSent);
             fread(connection->sendRecvBuffer, 1, bytesToSend, randomfp);
             char chunkTerminationAndHeader[20];
