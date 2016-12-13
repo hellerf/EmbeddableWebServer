@@ -37,25 +37,25 @@ STB_IMPLEMENTATION if you are familiar with the STB libraries
 
 static struct Server server;
 static THREAD_RETURN_TYPE STDCALL_ON_WIN32 acceptConnectionsThread(void* unusedParam) {
-	serverInit(&server);
-	const uint16_t portInHostOrder = 8080;
-	acceptConnectionsUntilStoppedFromEverywhereIPv4(&server, portInHostOrder);
-	return (THREAD_RETURN_TYPE) 0;
+    serverInit(&server);
+    const uint16_t portInHostOrder = 8080;
+    acceptConnectionsUntilStoppedFromEverywhereIPv4(&server, portInHostOrder);
+    return (THREAD_RETURN_TYPE) 0;
 }
 
 struct Response* createResponseForRequest(const struct Request* request, struct Connection* connection) {
-	time_t t;
-	time(&t);
-	return responseAllocHTMLWithFormat("<html><h1>The time is seconds is %ld</h1></html>", t);
+    time_t t;
+    time(&t);
+    return responseAllocHTMLWithFormat("<html><h1>The time is seconds is %ld</h1></html>", t);
 }
 
 int main() {
-	pthread_t threadHandle;
-	pthread_create(&threadHandle, NULL, &acceptConnectionsThread, NULL);
-	// rest of the program
-	while (1) {
-	}
-	return 0;
+    pthread_t threadHandle;
+    pthread_create(&threadHandle, NULL, &acceptConnectionsThread, NULL);
+    // rest of the program
+    while (1) {
+    }
+    return 0;
 }
 */
 
@@ -146,7 +146,7 @@ typedef enum  {
     RequestParseStateCRLF,
     RequestParseStateCRLFCR,
     RequestParseStateBody,
-	RequestParseStateEatHeaders,
+    RequestParseStateEatHeaders,
     RequestParseStateDone
 } RequestParseState;
 
@@ -219,7 +219,7 @@ struct Connection {
      the connection in the hopes that they are 'more aligned' */
     char sendRecvBuffer[SEND_RECV_BUFFER_SIZE];
     char responseHeader[RESPONSE_HEADER_SIZE];
-	sockettype socketfd;
+    sockettype socketfd;
     /* Who connected? */
     struct sockaddr_storage remoteAddr;
     socklen_t remoteAddrLength;
@@ -241,7 +241,7 @@ struct Response {
     char* filenameToSend;
     char* status;
     char* contentType;
-	char* extraHeaders; // can be NULL
+    char* extraHeaders; // can be NULL
 };
 
 struct Server {
@@ -249,8 +249,8 @@ struct Server {
     pthread_mutex_t globalMutex;
     bool shouldRun;
     sockettype listenerfd;
-	/* User field for whatever - if your request handler you can do connection->server->tag */
-	void* tag; 
+    /* User field for whatever - if your request handler you can do connection->server->tag */
+    void* tag; 
 
     /* The rest of the vars just have to do with shutting down the server cleanly.
      It's a lot of work, actually! Much simpler when I just let it run forever */
@@ -346,16 +346,16 @@ void EWSUnitTestsRun(void);
 
 /* these counters exist solely for the purpose of the /status demo */
 static struct Counters {
-	bool lockInitialized;
-	pthread_mutex_t lock;
-	int64_t bytesReceived;
-	int64_t bytesSent;
-	int64_t totalConnections;
-	int64_t activeConnections;
-	int64_t heapStringAllocations;
-	int64_t heapStringReallocations;
-	int64_t heapStringFrees;
-	int64_t heapStringTotalBytesReallocated;
+    bool lockInitialized;
+    pthread_mutex_t lock;
+    int64_t bytesReceived;
+    int64_t bytesSent;
+    int64_t totalConnections;
+    int64_t activeConnections;
+    int64_t heapStringAllocations;
+    int64_t heapStringReallocations;
+    int64_t heapStringFrees;
+    int64_t heapStringTotalBytesReallocated;
 } counters;
 
 #ifndef MIN
@@ -363,8 +363,8 @@ static struct Counters {
 #endif
 
 struct PathInformation {
-	bool exists;
-	bool isDirectory;
+    bool exists;
+    bool isDirectory;
 };
 
 static void responseFree(struct Response* response);
@@ -386,40 +386,40 @@ static int sendResponseFile(struct Connection* connection, const struct Response
 static int snprintfResponseHeader(char* destination, size_t destinationCapacity, int code, const char* status, const char* contentType, const char* extraHeaders, size_t contentLength);
 
 #ifdef WIN32 /* Windows implementations of functions available on Linux/Mac OS X */
-	/* opendir/readdir/closedir API implementation with FindNextFile */
-	struct dirent {
-		char d_name[1024];
-	};
-	typedef struct DIRStruct {
-		HANDLE findFiles;
-		WIN32_FIND_DATAW findData;
-		bool onFirstFile;
-		struct dirent currentEntry;
-	} DIR;
-	static DIR* opendir(const char* path);
-	static struct dirent* readdir(DIR* dirHandle);
-	static int closedir(DIR* dirHandle);
-	/* pthread implementation with critical sections and conditions */
-	static int pthread_detach(pthread_t threadHandle);
-	static int pthread_create(HANDLE* threadHandle, const void* attributes, LPTHREAD_START_ROUTINE thread, void* param);
-	static int pthread_cond_init(pthread_cond_t* cond, const void* attributes);
-	static int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex);
-	static int pthread_cond_signal(pthread_cond_t* cond);
-	static int pthread_cond_destroy(pthread_cond_t* cond);
-	static int pthread_mutex_init(pthread_mutex_t* mutex, const void* attributes);
-	static int pthread_mutex_lock(pthread_mutex_t* mutex);
-	static int pthread_mutex_unlock(pthread_mutex_t* mutex);
-	static int pthread_mutex_destroy(pthread_mutex_t* mutex);
-	static int snprintf(char* destination, size_t length, const char* format, ...);
-	static int strcasecmp(const char* utf8String1, const char* utf8String2);
-	static wchar_t* strdupWideFromUTF8(const char* utf8String, size_t extraBytes);
-	/* windows function aliases */
-	#define strdup(string) _strdup(string)
-	#define unlink(file) _unlink(file)
-	#define close(x) closesocket(x)
-	#define gai_strerror_ansi(x) gai_strerrorA(x)
+    /* opendir/readdir/closedir API implementation with FindNextFile */
+    struct dirent {
+        char d_name[1024];
+    };
+    typedef struct DIRStruct {
+        HANDLE findFiles;
+        WIN32_FIND_DATAW findData;
+        bool onFirstFile;
+        struct dirent currentEntry;
+    } DIR;
+    static DIR* opendir(const char* path);
+    static struct dirent* readdir(DIR* dirHandle);
+    static int closedir(DIR* dirHandle);
+    /* pthread implementation with critical sections and conditions */
+    static int pthread_detach(pthread_t threadHandle);
+    static int pthread_create(HANDLE* threadHandle, const void* attributes, LPTHREAD_START_ROUTINE thread, void* param);
+    static int pthread_cond_init(pthread_cond_t* cond, const void* attributes);
+    static int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex);
+    static int pthread_cond_signal(pthread_cond_t* cond);
+    static int pthread_cond_destroy(pthread_cond_t* cond);
+    static int pthread_mutex_init(pthread_mutex_t* mutex, const void* attributes);
+    static int pthread_mutex_lock(pthread_mutex_t* mutex);
+    static int pthread_mutex_unlock(pthread_mutex_t* mutex);
+    static int pthread_mutex_destroy(pthread_mutex_t* mutex);
+    static int snprintf(char* destination, size_t length, const char* format, ...);
+    static int strcasecmp(const char* utf8String1, const char* utf8String2);
+    static wchar_t* strdupWideFromUTF8(const char* utf8String, size_t extraBytes);
+    /* windows function aliases */
+    #define strdup(string) _strdup(string)
+    #define unlink(file) _unlink(file)
+    #define close(x) closesocket(x)
+    #define gai_strerror_ansi(x) gai_strerrorA(x)
 #else // WIN32
-	#define gai_strerror_ansi(x) gai_strerror(x)
+    #define gai_strerror_ansi(x) gai_strerror(x)
 #endif // Linux/Mac OS X
 
 #ifdef EWS_FUZZ_TEST
@@ -439,8 +439,8 @@ static void URLDecode(const char* encoded, char* decoded, size_t decodedCapacity
 
 static const struct Header* headerInRequest(const char* headerName, const struct Request* request) {
     for (size_t i = 0; i < request->headersCount; i++) {
-		assert(NULL != request->headers[i].name.contents);
-		if (0 == strcasecmp(request->headers[i].name.contents, headerName)) {
+        assert(NULL != request->headers[i].name.contents);
+        if (0 == strcasecmp(request->headers[i].name.contents, headerName)) {
             return &request->headers[i];
         }
     }
@@ -514,8 +514,8 @@ static char* strdupEscapeForURL(const char* stringToEscape) {
         bool isULetter = *p >= 'A' && *p <= 'Z';
         bool isLLetter = *p >= 'a' && *p <= 'z';
         bool isNumber = *p >= '0' && *p <= '9';
-		bool isAcceptablePunctuation = ('.' == *p || '/' == *p || '-' == *p);
-		if (isULetter || isLLetter || isNumber || isAcceptablePunctuation) {
+        bool isAcceptablePunctuation = ('.' == *p || '/' == *p || '-' == *p);
+        if (isULetter || isLLetter || isNumber || isAcceptablePunctuation) {
             heapStringAppendChar(&escapedString, *p);
         } else {
             // huh I guess %02x doesn't work in Windows?? holy cow
@@ -759,13 +759,13 @@ static bool heapStringIsSaneCString(const struct HeapString* heapString) {
         return true;
     }
     if (heapString->capacity <= heapString->length) {
-		ews_printf("Heap string %p has probably overwritten invalid memory because the capacity (%" PRIu64 ") is <= length (%" PRIu64 "), which is a big nono. The capacity must always be 1 more than the length since the contents is null-terminated for convenience.\n",
-			heapString, (uint64_t) heapString->capacity, (uint64_t)heapString->length);
+        ews_printf("Heap string %p has probably overwritten invalid memory because the capacity (%" PRIu64 ") is <= length (%" PRIu64 "), which is a big nono. The capacity must always be 1 more than the length since the contents is null-terminated for convenience.\n",
+            heapString, (uint64_t) heapString->capacity, (uint64_t)heapString->length);
         return false;
     }
     
     if (strlen(heapString->contents) != heapString->length) {
-		ews_printf("The %p strlen(heap string contents) (%" PRIu64 ") is not equal to heapString length (%" PRIu64 "), which is not correct for a C string. This can be correct if we're sending something like a PNG image which can contain '\\0' characters",
+        ews_printf("The %p strlen(heap string contents) (%" PRIu64 ") is not equal to heapString length (%" PRIu64 "), which is not correct for a C string. This can be correct if we're sending something like a PNG image which can contain '\\0' characters",
                heapString,
                (uint64_t) strlen(heapString->contents),
                (uint64_t) heapString->length);
@@ -816,11 +816,11 @@ struct HeapString connectionDebugStringCreate(const struct Connection* connectio
     struct HeapString debugString = {0};
     heapStringAppendFormat(&debugString, "%s %s from %s:%s\n", connection->request.method, connection->request.path, connection->remoteHost, connection->remotePort);
     heapStringAppendFormat(&debugString, "Request URL Path decoded to '%s'\n", connection->request.pathDecoded);
-	heapStringAppendFormat(&debugString, "Bytes sent:%" PRId64 "\n", connection->status.bytesSent);
-	heapStringAppendFormat(&debugString, "Bytes received:%" PRId64 "\n", connection->status.bytesReceived);
+    heapStringAppendFormat(&debugString, "Bytes sent:%" PRId64 "\n", connection->status.bytesSent);
+    heapStringAppendFormat(&debugString, "Bytes received:%" PRId64 "\n", connection->status.bytesReceived);
     heapStringAppendFormat(&debugString, "Final request parse state:%d\n", connection->request.state);
-	heapStringAppendFormat(&debugString, "Header pool used:%" PRIu64 "\n", (uint64_t) connection->request.headersStringPoolOffset);
-	heapStringAppendFormat(&debugString, "Header count:%" PRIu64 "\n", (uint64_t) connection->request.headersCount);
+    heapStringAppendFormat(&debugString, "Header pool used:%" PRIu64 "\n", (uint64_t) connection->request.headersStringPoolOffset);
+    heapStringAppendFormat(&debugString, "Header count:%" PRIu64 "\n", (uint64_t) connection->request.headersCount);
     bool firstHeader = true;
     heapStringAppendString(&debugString, "\n*** Request Headers ***\n");
     for (size_t i = 0; i < connection->request.headersCount; i++) {
@@ -875,7 +875,7 @@ static void poolStringStartNewString(struct PoolString* poolString, struct Reque
         return;
     }
     /* the pool string is full - don't initialize anything writable and ensure any writing to this pool string crashes */
-	if (request->headersStringPoolOffset >= REQUEST_HEADERS_MAX_MEMORY - 1 - sizeof('\0')) { // we need to store one character (-1) and a null character at the end of the last string sizeof('\0')
+    if (request->headersStringPoolOffset >= REQUEST_HEADERS_MAX_MEMORY - 1 - sizeof('\0')) { // we need to store one character (-1) and a null character at the end of the last string sizeof('\0')
         poolString->length = 0;
         poolString->contents = NULL;
         request->warnings.headersStringPoolExhausted = true;
@@ -922,12 +922,12 @@ struct Response* responseAllocHTML(const char* html) {
 }
 
 struct Response* responseAllocHTMLWithFormat(const char* format, ...) {
-	struct Response* response = responseAlloc(200, "OK", "text/html; charset=UTF-8", 0);
-	va_list ap;
-	va_start(ap, format);
-	heapStringAppendFormatV(&response->body, format, ap);
-	va_end(ap);
-	return response;
+    struct Response* response = responseAlloc(200, "OK", "text/html; charset=UTF-8", 0);
+    va_list ap;
+    va_start(ap, format);
+    heapStringAppendFormatV(&response->body, format, ap);
+    va_end(ap);
+    return response;
 }
 
 struct Response* responseAllocHTMLWithStatus(int code, const char* status, const char* html) {
@@ -941,12 +941,12 @@ struct Response* responseAllocJSON(const char* json) {
 }
 
 struct Response* responseAllocJSONWithFormat(const char* format, ...) {
-	struct Response* response = responseAlloc(200, "OK", "application/json", 0);
-	va_list ap;
-	va_start(ap, format);
-	heapStringAppendFormatV(&response->body, format, ap);
-	va_end(ap);
-	return response;
+    struct Response* response = responseAlloc(200, "OK", "application/json", 0);
+    va_list ap;
+    va_start(ap, format);
+    heapStringAppendFormatV(&response->body, format, ap);
+    va_end(ap);
+    return response;
 }
 
 struct Response* responseAllocJSONWithStatus(int code, const char* status, const char* json) {
@@ -965,59 +965,59 @@ struct Response* responseAllocWithFormat(int code, const char* status, const cha
 }
 
 static bool requestMatchesPathPrefix(const char* requestPathDecoded, const char* pathPrefix, size_t* matchLength) {
-	/* special case: pathPrefix is "" - matching everything*/
-	if (pathPrefix[0] == '\0') {
-		return true;
-	}
-	/* special case: requestPathDecoded is "" - match nothing */
-	if (requestPathDecoded[0] == '\0') {
-		return false;
-	}
-	/* cases to think about:
-	pathPrefix  = "/releases/current" OR  "/releases/current/"
-	requestPath = "/releases/current/" OR "/releases/current" */
-	size_t requestPathDecodedLength = strlen(requestPathDecoded);
-	size_t pathPrefixLength = strlen(pathPrefix);
-	/* we checked for zero-length strings above so it's afe to do this*/
-	bool pathPrefixEndsWithSlash = pathPrefix[pathPrefixLength - 1] == '/';
-	bool requestPathDecodedEndsWithSlash = requestPathDecoded[requestPathDecodedLength - 1] == '/';
-	if (requestPathDecoded == strstr(requestPathDecoded, pathPrefix)) {
-		/* if this code path finds a match, it will always be the full path prefix that's matched */
-		if (NULL != matchLength) {
-			*matchLength = pathPrefixLength;
-		}
-		/* ok we just matched pathPrefix = "/releases/current" but what if requestPathDecoded is "/releases/currentXXX"? */
-		if (!pathPrefixEndsWithSlash) {
-			/* pathPrefix is equal to requestPathDecoded */
-			if (pathPrefixLength == requestPathDecodedLength) {
-				assert(0 == strcmp(pathPrefix, requestPathDecoded) && "I'm assuming that the strings match with the length check + strstr above and I hope that's true. If not, that check needs to be replaced with real (0 == strcmp)");
-				return true;
-			}
-			assert(requestPathDecodedLength > pathPrefixLength && "In the following code I am assuming that the requestPathDecoded is indeed longer than the path prefix because of the length check I did above (even though that was ==, the strstr has to match it)");
-			/* pathPrefix = "/releases/current" and requestPathDecoded = "/releases/currentX" - we needs X to be a /
-			We want pathPrefix to match "/releases/current/" but not "/releases/current1"	*/
-			if (requestPathDecoded[pathPrefixLength] == '/') {
-				return true;
-			}
-			/* this is the case where pathPrefix = "/releases/current" and requestPathDecoded = "/releases/current1" */
-			return false;
-		}
-		return true;
-	}
-	/* It can still be the case that pathPrefix is "/releases/current/" and requestPathDecoded is "/releases/current".
-	It's tempting to just put an assert and make the user fix it but we'll use some extra code to handle it. */
-	if (requestPathDecodedLength == pathPrefixLength - 1) {
-		/* make sure we're specifically matchig "/releases/current/" with "/releases/current" and not something like "/releases/currentX" */
-		if (pathPrefixEndsWithSlash && !requestPathDecodedEndsWithSlash) {
-			if (0 == strncmp(requestPathDecoded, pathPrefix, requestPathDecodedLength)) {
-				if (NULL != matchLength) {
-					*matchLength = requestPathDecodedLength;
-				}
-				return true;
-			}
-		}
-	}
-	return false;
+    /* special case: pathPrefix is "" - matching everything*/
+    if (pathPrefix[0] == '\0') {
+        return true;
+    }
+    /* special case: requestPathDecoded is "" - match nothing */
+    if (requestPathDecoded[0] == '\0') {
+        return false;
+    }
+    /* cases to think about:
+    pathPrefix  = "/releases/current" OR  "/releases/current/"
+    requestPath = "/releases/current/" OR "/releases/current" */
+    size_t requestPathDecodedLength = strlen(requestPathDecoded);
+    size_t pathPrefixLength = strlen(pathPrefix);
+    /* we checked for zero-length strings above so it's afe to do this*/
+    bool pathPrefixEndsWithSlash = pathPrefix[pathPrefixLength - 1] == '/';
+    bool requestPathDecodedEndsWithSlash = requestPathDecoded[requestPathDecodedLength - 1] == '/';
+    if (requestPathDecoded == strstr(requestPathDecoded, pathPrefix)) {
+        /* if this code path finds a match, it will always be the full path prefix that's matched */
+        if (NULL != matchLength) {
+            *matchLength = pathPrefixLength;
+        }
+        /* ok we just matched pathPrefix = "/releases/current" but what if requestPathDecoded is "/releases/currentXXX"? */
+        if (!pathPrefixEndsWithSlash) {
+            /* pathPrefix is equal to requestPathDecoded */
+            if (pathPrefixLength == requestPathDecodedLength) {
+                assert(0 == strcmp(pathPrefix, requestPathDecoded) && "I'm assuming that the strings match with the length check + strstr above and I hope that's true. If not, that check needs to be replaced with real (0 == strcmp)");
+                return true;
+            }
+            assert(requestPathDecodedLength > pathPrefixLength && "In the following code I am assuming that the requestPathDecoded is indeed longer than the path prefix because of the length check I did above (even though that was ==, the strstr has to match it)");
+            /* pathPrefix = "/releases/current" and requestPathDecoded = "/releases/currentX" - we needs X to be a /
+            We want pathPrefix to match "/releases/current/" but not "/releases/current1"	*/
+            if (requestPathDecoded[pathPrefixLength] == '/') {
+                return true;
+            }
+            /* this is the case where pathPrefix = "/releases/current" and requestPathDecoded = "/releases/current1" */
+            return false;
+        }
+        return true;
+    }
+    /* It can still be the case that pathPrefix is "/releases/current/" and requestPathDecoded is "/releases/current".
+    It's tempting to just put an assert and make the user fix it but we'll use some extra code to handle it. */
+    if (requestPathDecodedLength == pathPrefixLength - 1) {
+        /* make sure we're specifically matchig "/releases/current/" with "/releases/current" and not something like "/releases/currentX" */
+        if (pathPrefixEndsWithSlash && !requestPathDecodedEndsWithSlash) {
+            if (0 == strncmp(requestPathDecoded, pathPrefix, requestPathDecodedLength)) {
+                if (NULL != matchLength) {
+                    *matchLength = requestPathDecodedLength;
+                }
+                return true;
+            }
+        }
+    }
+    return false;
 }
 /*
 Here's how the path logic works:
@@ -1067,39 +1067,39 @@ But if the URL does not end in a / we need to do:
 I'll call out this step below
 */
 struct Response* responseAllocServeFileFromRequestPath(const char* pathPrefix, const char* requestPath, const char* requestPathDecoded, const char* documentRoot) {
-	if (NULL == pathPrefix) {
-		ews_printf_debug("responseAllocServeFileFromRequestPath(): The user passed in NULL for pathPrefix so we just defaulted to / for them. Whatever.\n");
-		pathPrefix = "/";
-	}
-	assert(NULL != requestPath && "The requestPath should not be NULL. It can be empty, but not NULL. Pass request->path");
-	assert(NULL != requestPathDecoded && "The requestPathDecoded should not be NULL. It can be empty, but not NULL. Pass request->requestPathDecoded");
-	// Step 1 (see above)
-	size_t matchLength = 0;
-	/* Do we even match this path? Also figure out the suffix (note the use of the _decoded_ path -- otherwise we would have %12s and stuff everywhere */
-	if (!requestMatchesPathPrefix(requestPathDecoded, pathPrefix, &matchLength)) {
-		return responseAlloc400BadRequestHTML("You requested the server to serve a path it doesn't know. Use the <code>requestMatchesPathPrefix</code> before passing this path. Or use a <code>pathPrefix</code> of <code>/</code> to have the server serve files from all URLs.");
-	}
-	const char* requestPathSuffix = requestPathDecoded + matchLength;
-	// Step 2 (see above)
-	while ('/' == *requestPathSuffix || '\\' == *requestPathSuffix) {
-		requestPathSuffix++;
-	}
-	// Step 3 (see above)
-	if (pathEscapesDocumentRoot(requestPathSuffix)) {
+    if (NULL == pathPrefix) {
+        ews_printf_debug("responseAllocServeFileFromRequestPath(): The user passed in NULL for pathPrefix so we just defaulted to / for them. Whatever.\n");
+        pathPrefix = "/";
+    }
+    assert(NULL != requestPath && "The requestPath should not be NULL. It can be empty, but not NULL. Pass request->path");
+    assert(NULL != requestPathDecoded && "The requestPathDecoded should not be NULL. It can be empty, but not NULL. Pass request->requestPathDecoded");
+    // Step 1 (see above)
+    size_t matchLength = 0;
+    /* Do we even match this path? Also figure out the suffix (note the use of the _decoded_ path -- otherwise we would have %12s and stuff everywhere */
+    if (!requestMatchesPathPrefix(requestPathDecoded, pathPrefix, &matchLength)) {
+        return responseAlloc400BadRequestHTML("You requested the server to serve a path it doesn't know. Use the <code>requestMatchesPathPrefix</code> before passing this path. Or use a <code>pathPrefix</code> of <code>/</code> to have the server serve files from all URLs.");
+    }
+    const char* requestPathSuffix = requestPathDecoded + matchLength;
+    // Step 2 (see above)
+    while ('/' == *requestPathSuffix || '\\' == *requestPathSuffix) {
+        requestPathSuffix++;
+    }
+    // Step 3 (see above)
+    if (pathEscapesDocumentRoot(requestPathSuffix)) {
         return responseAllocHTMLWithStatus(403, "Forbidden", "<html><head><title>Forbidden</title></head><body>You are not allowed to access this URL</body></html>");
     }
-	// Step 4 (see above)
-	struct HeapString filePath;
-	heapStringInit(&filePath);
-	heapStringSetToCString(&filePath, documentRoot);
-	bool pathSuffixIsNotEmpty = '\0' != *requestPathSuffix;
-	if (pathSuffixIsNotEmpty) {
-		heapStringAppendChar(&filePath, '/');
-		heapStringAppendString(&filePath, requestPathSuffix);
-	}
+    // Step 4 (see above)
+    struct HeapString filePath;
+    heapStringInit(&filePath);
+    heapStringSetToCString(&filePath, documentRoot);
+    bool pathSuffixIsNotEmpty = '\0' != *requestPathSuffix;
+    if (pathSuffixIsNotEmpty) {
+        heapStringAppendChar(&filePath, '/');
+        heapStringAppendString(&filePath, requestPathSuffix);
+    }
     struct PathInformation pathInfo;
-	ews_printf_debug("Looking up file path '%s' to serve request '%s' (originally encoded '%s'). We believe the path suffix is '%s'...\n", filePath.contents, requestPathDecoded, requestPath, requestPathSuffix);
-	int result = pathInformationGet(filePath.contents, &pathInfo);
+    ews_printf_debug("Looking up file path '%s' to serve request '%s' (originally encoded '%s'). We believe the path suffix is '%s'...\n", filePath.contents, requestPathDecoded, requestPath, requestPathSuffix);
+    int result = pathInformationGet(filePath.contents, &pathInfo);
     if (0 != result) {
         ews_printf("Failed to serve file: pathInformation returned %d for path '%s', request '%s' documentRoot '%s' with %s = %d\n", result, filePath.contents, requestPathDecoded, documentRoot, strerror(errno), errno);
         heapStringFreeContents(&filePath);
@@ -1108,55 +1108,55 @@ struct Response* responseAllocServeFileFromRequestPath(const char* pathPrefix, c
     /* ok the file is really not found */
     if (!pathInfo.exists) {
         struct Response* response = responseAlloc404NotFoundHTML(filePath.contents);
-		heapStringFreeContents(&filePath);
-		return response;
-	}
+        heapStringFreeContents(&filePath);
+        return response;
+    }
 #ifdef CHECK_SERVED_FILES_WITH_REALPATH
 #ifdef WIN32
 #error CHECKS_SERVED_FILES_WITH_REALPATH will not work in WIN32 because Windows does not support realpath
 #endif
-	char* filePathResolved = realpath(filePath.contents, NULL);
-	if (NULL == filePathResolved) {
-		printf("Warning: The file path '%s' could not be resolved with realpath. %s = %d\n", filePath.contents, strerror(errno), errno);
-	}
-	char* documentRootResolved = realpath(documentRoot, NULL);
-	if (NULL == documentRootResolved) {
-		printf("Warning: Your documentRoot '%s' could not be resolved with realpath. %s = %d\n", documentRoot, strerror(errno), errno);
-	}
-	ews_printf_debug("Resolved documentRoot to '%s' and file path to '%s'\n", documentRoot, filePath.contents);
-	if (strlen(filePathResolved) < strlen(documentRootResolved)) {
-		ews_printf("Error: the filePath '%s' from requestPathDecoded '%s' requestPathSuffix '%s' escapes documentRoot '%s'. The requestPathSuffix realpath's to '%s' and the documentRoot realpath's to '%s'\n",
-			filePath.contents, requestPathDecoded, requestPathSuffix, documentRoot, filePathResolved, documentRootResolved);
-	}
+    char* filePathResolved = realpath(filePath.contents, NULL);
+    if (NULL == filePathResolved) {
+        printf("Warning: The file path '%s' could not be resolved with realpath. %s = %d\n", filePath.contents, strerror(errno), errno);
+    }
+    char* documentRootResolved = realpath(documentRoot, NULL);
+    if (NULL == documentRootResolved) {
+        printf("Warning: Your documentRoot '%s' could not be resolved with realpath. %s = %d\n", documentRoot, strerror(errno), errno);
+    }
+    ews_printf_debug("Resolved documentRoot to '%s' and file path to '%s'\n", documentRoot, filePath.contents);
+    if (strlen(filePathResolved) < strlen(documentRootResolved)) {
+        ews_printf("Error: the filePath '%s' from requestPathDecoded '%s' requestPathSuffix '%s' escapes documentRoot '%s'. The requestPathSuffix realpath's to '%s' and the documentRoot realpath's to '%s'\n",
+            filePath.contents, requestPathDecoded, requestPathSuffix, documentRoot, filePathResolved, documentRootResolved);
+    }
 #endif
 
-	if (pathInfo.isDirectory) {
-		if (!OptionListDirectoryContents) {
-			ews_printf("Failed to serve directory: OptionListDirectoryContents is false so we aren't serving the directory contents/listing for request '%s' documentRoot '%s', pointing at dir '%s'\n", requestPathDecoded, documentRoot, filePath.contents);
-			return responseAllocHTMLWithStatus(403, "Forbidden", "<html><head><title>403 - Forbidden</title></head><body>You are forbidden from accessing this URL.</body></html>");
-		}
-		/* If it's a directory, see if we can serve up index.html */
-		struct HeapString indexFilePath;
-		heapStringInit(&indexFilePath);
-		heapStringAppendHeapString(&indexFilePath, &filePath);
-		heapStringAppendString(&indexFilePath, "/index.html");
-		struct PathInformation indexFilePathInfo;
-		ews_printf_debug("Path '%s' is a directory. Seeing if we can open %s...\n", filePath.contents, indexFilePath.contents);
-		result = pathInformationGet(indexFilePath.contents, &indexFilePathInfo);
-		if (0 != result) {
-			ews_printf("Failed to serve file: pathInformation returned %d for path '%s', request '%s' documentRoot '%s' with %s = %d\n", result, indexFilePath.contents, requestPathDecoded, documentRoot, strerror(errno), errno);
-			heapStringFreeContents(&filePath);
-			heapStringFreeContents(&indexFilePath);
-			return responseAlloc500InternalErrorHTML("Information about the path could not be determined for your request");
-		}
-		if (indexFilePathInfo.exists && !indexFilePathInfo.isDirectory) {
-			struct Response* response = responseAllocWithFile(indexFilePath.contents, NULL);
-			heapStringFreeContents(&filePath);
-			heapStringFreeContents(&indexFilePath);
-			return response;
-		}
-		heapStringFreeContents(&indexFilePath);
-		/* There's no index.html - serve up the directory contents */
+    if (pathInfo.isDirectory) {
+        if (!OptionListDirectoryContents) {
+            ews_printf("Failed to serve directory: OptionListDirectoryContents is false so we aren't serving the directory contents/listing for request '%s' documentRoot '%s', pointing at dir '%s'\n", requestPathDecoded, documentRoot, filePath.contents);
+            return responseAllocHTMLWithStatus(403, "Forbidden", "<html><head><title>403 - Forbidden</title></head><body>You are forbidden from accessing this URL.</body></html>");
+        }
+        /* If it's a directory, see if we can serve up index.html */
+        struct HeapString indexFilePath;
+        heapStringInit(&indexFilePath);
+        heapStringAppendHeapString(&indexFilePath, &filePath);
+        heapStringAppendString(&indexFilePath, "/index.html");
+        struct PathInformation indexFilePathInfo;
+        ews_printf_debug("Path '%s' is a directory. Seeing if we can open %s...\n", filePath.contents, indexFilePath.contents);
+        result = pathInformationGet(indexFilePath.contents, &indexFilePathInfo);
+        if (0 != result) {
+            ews_printf("Failed to serve file: pathInformation returned %d for path '%s', request '%s' documentRoot '%s' with %s = %d\n", result, indexFilePath.contents, requestPathDecoded, documentRoot, strerror(errno), errno);
+            heapStringFreeContents(&filePath);
+            heapStringFreeContents(&indexFilePath);
+            return responseAlloc500InternalErrorHTML("Information about the path could not be determined for your request");
+        }
+        if (indexFilePathInfo.exists && !indexFilePathInfo.isDirectory) {
+            struct Response* response = responseAllocWithFile(indexFilePath.contents, NULL);
+            heapStringFreeContents(&filePath);
+            heapStringFreeContents(&indexFilePath);
+            return response;
+        }
+        heapStringFreeContents(&indexFilePath);
+        /* There's no index.html - serve up the directory contents */
         DIR* dir = opendir(filePath.contents);
         if (NULL == dir) {
             ews_printf("Failed to print directory '%s': opendir failed. %s = %d\n", filePath.contents, strerror(errno), errno);
@@ -1164,28 +1164,28 @@ struct Response* responseAllocServeFileFromRequestPath(const char* pathPrefix, c
             return responseAlloc500InternalErrorHTML("We could not open the directory for iterating");
         }
         struct Response* response = responseAllocHTML("<html><head><title>Directory Reading</title><body>");
-		// Step 5 (see above) - this is actually pretty tricky
-		/* Again, if the URL doesn't end in a / then we need to figure out how to link to the file */
-		const char* hrefPrefix = "";
-		const char* frontSlash = "";
-		if (!strEndsWith(requestPathDecoded, "/")) {
-			/* find the last /.  in /releases/current, point to /current*/
-			hrefPrefix = strrchr(requestPathDecoded, '/');
-			if (NULL == hrefPrefix) {
-				/* I don't think browsers will ever send something without a / */
-				hrefPrefix = requestPath;
-			} else {
-				/* hrefPrefix = "/current" but we just want to point to "current" */
-				hrefPrefix++; // skip the "/"
-			}
-			/* we want to put a / in between hrefPrefix and entry->d_name but I don't want to allocate any more gosh darn memory*/
-			frontSlash = "/";
-		}
-		struct dirent* entry;
-		while (NULL != (entry = readdir(dir))) {
-			char* escapedEntryName = strdupEscapeForURL(entry->d_name);
-			heapStringAppendFormat(&response->body, "<a href=\"%s%s%s\">%s</a><br>\n", hrefPrefix, frontSlash, escapedEntryName, entry->d_name);
-			free(escapedEntryName);
+        // Step 5 (see above) - this is actually pretty tricky
+        /* Again, if the URL doesn't end in a / then we need to figure out how to link to the file */
+        const char* hrefPrefix = "";
+        const char* frontSlash = "";
+        if (!strEndsWith(requestPathDecoded, "/")) {
+            /* find the last /.  in /releases/current, point to /current*/
+            hrefPrefix = strrchr(requestPathDecoded, '/');
+            if (NULL == hrefPrefix) {
+                /* I don't think browsers will ever send something without a / */
+                hrefPrefix = requestPath;
+            } else {
+                /* hrefPrefix = "/current" but we just want to point to "current" */
+                hrefPrefix++; // skip the "/"
+            }
+            /* we want to put a / in between hrefPrefix and entry->d_name but I don't want to allocate any more gosh darn memory*/
+            frontSlash = "/";
+        }
+        struct dirent* entry;
+        while (NULL != (entry = readdir(dir))) {
+            char* escapedEntryName = strdupEscapeForURL(entry->d_name);
+            heapStringAppendFormat(&response->body, "<a href=\"%s%s%s\">%s</a><br>\n", hrefPrefix, frontSlash, escapedEntryName, entry->d_name);
+            free(escapedEntryName);
         }
         closedir(dir);
         return response;
@@ -1235,23 +1235,23 @@ static void responseFree(struct Response* response) {
     if (NULL != response->contentType) {
         free(response->contentType);
     }
-	if (NULL != response->extraHeaders) {
-		free(response->extraHeaders);
-	}
+    if (NULL != response->extraHeaders) {
+        free(response->extraHeaders);
+    }
     heapStringFreeContents(&response->body);
     free(response);
 }
 
 /* Only grab another header if we have space for it. This was revealed to be open for attack by afl-fuzz! */
 static RequestParseState stateHeaderNameIfSpaceLeft(struct Request* request) {
-	if (request->headersCount < REQUEST_MAX_HEADERS) {
-		if (!request->warnings.headersStringPoolExhausted) {
-			return RequestParseStateHeaderName;
-		}
-	} else {
-		request->warnings.tooManyHeaders = true;
-	}
-	return RequestParseStateEatHeaders;
+    if (request->headersCount < REQUEST_MAX_HEADERS) {
+        if (!request->warnings.headersStringPoolExhausted) {
+            return RequestParseStateHeaderName;
+        }
+    } else {
+        request->warnings.tooManyHeaders = true;
+    }
+    return RequestParseStateEatHeaders;
 }
 
 /* parses a typical HTTP request looking for the first line: GET /path HTTP/1.0\r\n */
@@ -1292,58 +1292,58 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                 }
                 break;
             case RequestParseStateHeaderName:
-				assert(request->headersCount < REQUEST_MAX_HEADERS && "Parsing the request header name assumes we have space for more headers");
-				if (c == ':') {
-					request->state = RequestParseStateHeaderValue;
-				} else if (c == '\r') {
-					request->state = RequestParseStateCR;
-				} else  {
-					/* if this is the first character in this header name, then initialize the string pool */
-					if (NULL == request->headers[request->headersCount].name.contents) {
-						poolStringStartNewString(&request->headers[request->headersCount].name, request);
-					}
-					/* store the header name in the string pool */
-					poolStringAppendChar(request, &request->headers[request->headersCount].name, c);
-				}
-				break;
-			case RequestParseStateHeaderValue:
-				assert(request->headersCount < REQUEST_MAX_HEADERS && "Parsing the request header value assumes we have space for more headers");
-				/* skip the first space if we are saving this to header */
-                if (c == ' ' && request->headers[request->headersCount].value.length == 0) {
-					/* intentionally skipped */
+                assert(request->headersCount < REQUEST_MAX_HEADERS && "Parsing the request header name assumes we have space for more headers");
+                if (c == ':') {
+                    request->state = RequestParseStateHeaderValue;
                 } else if (c == '\r') {
-					/* only go to the next header if we were able to fill this one out - it is important to check both,
-					especially in the case of a header like ": safdasdf" */
-					if (request->headers[request->headersCount].value.length > 0 && request->headers[request->headersCount].name.length > 0) {
-						request->headersCount++;
-					}
+                    request->state = RequestParseStateCR;
+                } else  {
+                    /* if this is the first character in this header name, then initialize the string pool */
+                    if (NULL == request->headers[request->headersCount].name.contents) {
+                        poolStringStartNewString(&request->headers[request->headersCount].name, request);
+                    }
+                    /* store the header name in the string pool */
+                    poolStringAppendChar(request, &request->headers[request->headersCount].name, c);
+                }
+                break;
+            case RequestParseStateHeaderValue:
+                assert(request->headersCount < REQUEST_MAX_HEADERS && "Parsing the request header value assumes we have space for more headers");
+                /* skip the first space if we are saving this to header */
+                if (c == ' ' && request->headers[request->headersCount].value.length == 0) {
+                    /* intentionally skipped */
+                } else if (c == '\r') {
+                    /* only go to the next header if we were able to fill this one out - it is important to check both,
+                    especially in the case of a header like ": safdasdf" */
+                    if (request->headers[request->headersCount].value.length > 0 && request->headers[request->headersCount].name.length > 0) {
+                        request->headersCount++;
+                    }
                     request->state = RequestParseStateCR;
                 } else {
-					assert(request->headersCount < REQUEST_MAX_HEADERS && "Parsing the request header value assumes we have space for more headers");
-					/* if this is the first character in this header name, then initialize the string pool */
-					if (NULL == request->headers[request->headersCount].value.contents) {
-						poolStringStartNewString(&request->headers[request->headersCount].value, request);
-					}
-					/* store the header name in the string pool */
-					poolStringAppendChar(request, &request->headers[request->headersCount].value, c);
+                    assert(request->headersCount < REQUEST_MAX_HEADERS && "Parsing the request header value assumes we have space for more headers");
+                    /* if this is the first character in this header name, then initialize the string pool */
+                    if (NULL == request->headers[request->headersCount].value.contents) {
+                        poolStringStartNewString(&request->headers[request->headersCount].value, request);
+                    }
+                    /* store the header name in the string pool */
+                    poolStringAppendChar(request, &request->headers[request->headersCount].value, c);
                 }
                 break;
             case RequestParseStateCR:
                 if (c == '\n') {
                     request->state = RequestParseStateCRLF;
                 } else {
-					request->state = stateHeaderNameIfSpaceLeft(request);
+                    request->state = stateHeaderNameIfSpaceLeft(request);
                 }
                 break;
             case RequestParseStateCRLF:
                 if (c == '\r') {
                     request->state = RequestParseStateCRLFCR;
                 } else {
-					request->state = stateHeaderNameIfSpaceLeft(request);
-					if (RequestParseStateHeaderName == request->state) {
-						/* this is the first character of the header - replay the HeaderName case so this character gets appended */
-						i--;
-					}
+                    request->state = stateHeaderNameIfSpaceLeft(request);
+                    if (RequestParseStateHeaderName == request->state) {
+                        /* this is the first character of the header - replay the HeaderName case so this character gets appended */
+                        i--;
+                    }
                 }
                 break;
             case RequestParseStateCRLFCR:
@@ -1353,19 +1353,19 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                     const struct Header* contentLengthHeader = headerInRequest("Content-Length", request);
                     if (NULL != contentLengthHeader) {
                         ews_printf_debug("Incoming request has a body of length %s\n", contentLengthHeader->value.contents);
-						/* Note that this limits content length to < 2GB on Windows */
+                        /* Note that this limits content length to < 2GB on Windows */
                         long contentLength = 0;
                         if (1 == sscanf(contentLengthHeader->value.contents, "%ld", &contentLength)) {
                             if (contentLength > REQUEST_MAX_BODY_LENGTH) {
                                 contentLength = REQUEST_MAX_BODY_LENGTH;
                             }
-							if (contentLength < 0) {
-								ews_printf_debug("Warning: Incoming request has negative content length: %ld\n", contentLength);
-								contentLength = 0;
-							}
-							if (contentLength > 0) {
-								request->body.contents = (char*)calloc(1, contentLength + 1);
-							}
+                            if (contentLength < 0) {
+                                ews_printf_debug("Warning: Incoming request has negative content length: %ld\n", contentLength);
+                                contentLength = 0;
+                            }
+                            if (contentLength > 0) {
+                                request->body.contents = (char*)calloc(1, contentLength + 1);
+                            }
                             request->body.capacity = contentLength;
                             request->body.length = 0;
                             request->state = RequestParseStateBody;
@@ -1374,22 +1374,22 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                     } else {
                     }
                 } else {
-					request->state = stateHeaderNameIfSpaceLeft(request);
+                    request->state = stateHeaderNameIfSpaceLeft(request);
                 }
                 break;
-			case RequestParseStateEatHeaders:
-				/* we have no more room for headers right now */
-				if (c == '\r') {
-					request->state = RequestParseStateCR;
-				}
-				break;
+            case RequestParseStateEatHeaders:
+                /* we have no more room for headers right now */
+                if (c == '\r') {
+                    request->state = RequestParseStateCR;
+                }
+                break;
             case RequestParseStateBody:
-				/* Copy the request body into request->body - the .length is from Content-Length so don't trust that (found with afl-fuzz!) */
-				if (request->body.length < request->body.capacity) {
-					request->body.contents[request->body.length] = c;
-					request->body.length++;
-				}
-				if (request->body.length == request->body.capacity) {
+                /* Copy the request body into request->body - the .length is from Content-Length so don't trust that (found with afl-fuzz!) */
+                if (request->body.length < request->body.capacity) {
+                    request->body.contents[request->body.length] = c;
+                    request->body.length++;
+                }
+                if (request->body.length == request->body.capacity) {
                     request->state = RequestParseStateDone;
                 }
                 break;
@@ -1419,7 +1419,7 @@ static void requestPrintWarnings(const struct Request* request, const char* remo
         ews_printf("Warning: Request from %s:%s version was truncated to %s\n", remoteHost, remotePort, request->version);
     }
     if (request->warnings.bodyTruncated) {
-		ews_printf("Warning: Request from %s:%s body was truncated to %" PRIu64 " bytes\n", remoteHost, remotePort, (uint64_t)request->body.length);
+        ews_printf("Warning: Request from %s:%s body was truncated to %" PRIu64 " bytes\n", remoteHost, remotePort, (uint64_t)request->body.length);
     }
 }
 
@@ -1436,7 +1436,7 @@ static void connectionFree(struct Connection* connection) {
 }
 
 static void SIGPIPEHandler(int signal) {
-	/* SIGPIPE happens any time we try to send() and the connection is closed. So we just ignore it and check the return code of send...*/
+    /* SIGPIPE happens any time we try to send() and the connection is closed. So we just ignore it and check the return code of send...*/
     ews_printf_debug("Ignoring SIGPIPE\n");
 }
 
@@ -1453,7 +1453,7 @@ void serverInit(struct Server* server) {
     server->activeConnectionCount = 0;
     server->shouldRun = true;
     server->initialized = true;
-	ignoreSIGPIPE();
+    ignoreSIGPIPE();
     /* kind of hacky and not thread-safe but I'm ok with that for just these counters */
     if (!counters.lockInitialized) {
         pthread_mutex_init(&counters.lock, NULL);
@@ -1494,19 +1494,19 @@ int acceptConnectionsUntilStoppedFromEverywhereIPv4(struct Server* serverOrNULL,
     anyInterfaceIPv4.sin_addr.s_addr = htonl(INADDR_ANY); // also popular inet_addr("127.0.0.1") which is INADDR_LOOPBACK
     anyInterfaceIPv4.sin_family = AF_INET;
     anyInterfaceIPv4.sin_port = htons(portInHostOrder);
-	return acceptConnectionsUntilStopped(serverOrNULL, (struct sockaddr*) &anyInterfaceIPv4, sizeof(anyInterfaceIPv4));
+    return acceptConnectionsUntilStopped(serverOrNULL, (struct sockaddr*) &anyInterfaceIPv4, sizeof(anyInterfaceIPv4));
 }
 
 int acceptConnectionsUntilStopped(struct Server* serverOrNULL, const struct sockaddr* address, socklen_t addressLength) {
     bool usingOurOwnServer = false;
-	struct Server* server;
-	if (NULL == serverOrNULL) {
+    struct Server* server;
+    if (NULL == serverOrNULL) {
         usingOurOwnServer = true;
         server = (struct Server*) calloc(1, sizeof(*server));
         serverInit(server);
-	} else {
-		server = serverOrNULL;
-	}
+    } else {
+        server = serverOrNULL;
+    }
     int result = acceptConnectionsUntilStoppedInternal(server, address, addressLength);
     if (usingOurOwnServer) {
         serverDeInit(server);
@@ -1516,9 +1516,9 @@ int acceptConnectionsUntilStopped(struct Server* serverOrNULL, const struct sock
 }
 
 static int acceptConnectionsUntilStoppedInternal(struct Server* server, const struct sockaddr* address, socklen_t addressLength) {
-	assert(NULL != server && "Why was there no valid server when we got to acceptConnectionsUntilStoppedInternal? We should have something");
+    assert(NULL != server && "Why was there no valid server when we got to acceptConnectionsUntilStoppedInternal? We should have something");
     assert(server->initialized && "The server was not initialized. Can you please call serverInit(&server) or pass NULL?");
-	callWSAStartupIfNecessary();
+    callWSAStartupIfNecessary();
     /* resolve the local address we are binding to so we can print it out later */
     char addressHost[256];
     char addressPort[20];
@@ -1630,7 +1630,7 @@ static int sendResponse(struct Connection* connection, const struct Response* re
 
 static int sendResponseBody(struct Connection* connection, const struct Response* response, ssize_t* bytesSent) {
     /* First send the response HTTP headers */
-	int headerLength = snprintfResponseHeader(connection->responseHeader, sizeof(connection->responseHeader), response->code, response->status, response->contentType, response->extraHeaders, response->body.length);
+    int headerLength = snprintfResponseHeader(connection->responseHeader, sizeof(connection->responseHeader), response->code, response->status, response->contentType, response->extraHeaders, response->body.length);
     ssize_t sendResult;
     sendResult = send(connection->socketfd, connection->responseHeader, headerLength, 0);
     if (sendResult != headerLength) {
@@ -1642,15 +1642,15 @@ static int sendResponseBody(struct Connection* connection, const struct Response
                errno);
         return -1;
     }
-	if (OptionPrintResponse) {
-		fwrite(connection->responseHeader, 1, headerLength, stdout);
-	}
-	*bytesSent = *bytesSent + sendResult;
+    if (OptionPrintResponse) {
+        fwrite(connection->responseHeader, 1, headerLength, stdout);
+    }
+    *bytesSent = *bytesSent + sendResult;
     /* Second, if a response body exists, send that */
     if (response->body.length > 0) {
         sendResult = send(connection->socketfd, response->body.contents, response->body.length, 0);
-		if (sendResult != response->body.length) {
-			ews_printf("Failed to respond to %s:%s because we could not send the HTTP response *body*. send returned %" PRId64 " with %s = %d\n",
+        if (sendResult != response->body.length) {
+            ews_printf("Failed to respond to %s:%s because we could not send the HTTP response *body*. send returned %" PRId64 " with %s = %d\n",
                    connection->remoteHost,
                    connection->remotePort,
                    (int64_t) sendResult,
@@ -1658,21 +1658,21 @@ static int sendResponseBody(struct Connection* connection, const struct Response
                    errno);
             return -1;
         }
-		if (OptionPrintResponse) {
-			fwrite(response->body.contents, 1, response->body.length, stdout);
-		}
-		*bytesSent = *bytesSent + sendResult;
+        if (OptionPrintResponse) {
+            fwrite(response->body.contents, 1, response->body.length, stdout);
+        }
+        *bytesSent = *bytesSent + sendResult;
     }
     return 0;
 }
 
 static int sendResponseFile(struct Connection* connection, const struct Response* response, ssize_t* bytesSent) {
     /* If you were writing a high-performance web server you could use 
-	sendfile, memory map the file, or any number of exciting things. But
-	here we just fread the first 100 bytes to figure out MIME type, then rewind
-	and send the file ~16KB at a time. */
+    sendfile, memory map the file, or any number of exciting things. But
+    here we just fread the first 100 bytes to figure out MIME type, then rewind
+    and send the file ~16KB at a time. */
     struct Response* errorResponse = NULL;
-	FILE* fp = fopen_utf8_path(response->filenameToSend, "rb");
+    FILE* fp = fopen_utf8_path(response->filenameToSend, "rb");
     int result = 0;
     long fileLength;
     ssize_t sendResult;
@@ -1685,20 +1685,20 @@ static int sendResponseFile(struct Connection* connection, const struct Response
         errorResponse = responseAlloc404NotFoundHTML(connection->request.path);
         goto exit;
     }
-	/* If the MIME type if specified in the response->contentType, use that. Otherwise try to guess with MIMETypeFromFile */
-	if (NULL != response->contentType) {
-		contentType = response->contentType;
-	} else {
-		assert(sizeof(connection->sendRecvBuffer) >= MIMEReadSize);
-		actualMIMEReadSize = fread(connection->sendRecvBuffer, 1, MIMEReadSize, fp);
-		if (-1 == actualMIMEReadSize) {
-			ews_printf("Unable to satisfy request for '%s' because we could read the first bunch of bytes to determine MIME type '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
-			errorResponse = responseAlloc500InternalErrorHTML("fread for MIME type detection failed");
-			goto exit;
-		}
-		contentType = MIMETypeFromFile(response->filenameToSend, (const uint8_t*)connection->sendRecvBuffer, actualMIMEReadSize);
-		ews_printf_debug("Detected MIME type '%s' for file '%s'\n", contentType, response->filenameToSend);
-	}
+    /* If the MIME type if specified in the response->contentType, use that. Otherwise try to guess with MIMETypeFromFile */
+    if (NULL != response->contentType) {
+        contentType = response->contentType;
+    } else {
+        assert(sizeof(connection->sendRecvBuffer) >= MIMEReadSize);
+        actualMIMEReadSize = fread(connection->sendRecvBuffer, 1, MIMEReadSize, fp);
+        if (-1 == actualMIMEReadSize) {
+            ews_printf("Unable to satisfy request for '%s' because we could read the first bunch of bytes to determine MIME type '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
+            errorResponse = responseAlloc500InternalErrorHTML("fread for MIME type detection failed");
+            goto exit;
+        }
+        contentType = MIMETypeFromFile(response->filenameToSend, (const uint8_t*)connection->sendRecvBuffer, actualMIMEReadSize);
+        ews_printf_debug("Detected MIME type '%s' for file '%s'\n", contentType, response->filenameToSend);
+    }
     /* get the file length, laboriously checking for errors */
     result = fseek(fp, 0, SEEK_END);
     if (0 != result) {
@@ -1720,17 +1720,17 @@ static int sendResponseFile(struct Connection* connection, const struct Response
     }
     
     /* now we have the file length + MIME TYpe and we can send the header */
-	headerLength = snprintfResponseHeader(connection->responseHeader, sizeof(connection->responseHeader), response->code, response->status, contentType, response->extraHeaders, fileLength);
+    headerLength = snprintfResponseHeader(connection->responseHeader, sizeof(connection->responseHeader), response->code, response->status, contentType, response->extraHeaders, fileLength);
     sendResult = send(connection->socketfd, connection->responseHeader, headerLength, 0);
     if (sendResult != headerLength) {
         ews_printf("Unable to satisfy request for '%s' because we could not send the HTTP header '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
         result = 1;
         goto exit;
     }
-	if (OptionPrintResponse) {
-		fwrite(connection->responseHeader, 1, headerLength, stdout);
-	}
-	*bytesSent = sendResult;
+    if (OptionPrintResponse) {
+        fwrite(connection->responseHeader, 1, headerLength, stdout);
+    }
+    *bytesSent = sendResult;
     /* read the whole file, just buffering into the connection buffer, and sending it out to the socket */
     while (!feof(fp)) {
         size_t bytesRead = fread(connection->sendRecvBuffer, 1, sizeof(connection->sendRecvBuffer), fp);
@@ -1749,9 +1749,9 @@ static int sendResponseFile(struct Connection* connection, const struct Response
             result = 1;
             goto exit;
         }
-		if (OptionPrintResponse) {
-			fwrite(connection->sendRecvBuffer, 1, bytesRead, stdout);
-		}
+        if (OptionPrintResponse) {
+            fwrite(connection->sendRecvBuffer, 1, bytesRead, stdout);
+        }
 
         *bytesSent = *bytesSent + sendResult;
     }
@@ -1760,7 +1760,7 @@ exit:
         fclose(fp);
     }
     if (NULL != errorResponse) {
-		ews_printf("Instead of satisfying the request for '%s' we encountered an error and will return %d %s\n", connection->request.path, response->code, response->status);
+        ews_printf("Instead of satisfying the request for '%s' we encountered an error and will return %d %s\n", connection->request.path, response->code, response->status);
         ssize_t errorBytesSent = 0;
         result = sendResponseBody(connection, errorResponse, &errorBytesSent);
         *bytesSent = *bytesSent + errorBytesSent;
@@ -1805,9 +1805,9 @@ static THREAD_RETURN_TYPE STDCALL_ON_WIN32 connectionHandlerThread(void* connect
             break;
         }
 #ifdef EWS_FUZZ_TESTING /* This enables us to fuzz test different content lengths */
-		if (connection->request.state == RequestParseStateBody) {
-			foundRequest = true;
-		}
+        if (connection->request.state == RequestParseStateBody) {
+            foundRequest = true;
+        }
 #endif
     }
     requestPrintWarnings(&connection->request, connection->remoteHost, connection->remotePort);
@@ -1817,7 +1817,7 @@ static THREAD_RETURN_TYPE STDCALL_ON_WIN32 connectionHandlerThread(void* connect
         if (NULL != response) {
             int result = sendResponse(connection, response, &bytesSent);
             if (0 == result) {
-				ews_printf_debug("%s:%s: Responded with HTTP %d %s length %" PRId64 "\n", connection->remoteHost, connection->remotePort, response->code, response->status, (int64_t)bytesSent);
+                ews_printf_debug("%s:%s: Responded with HTTP %d %s length %" PRId64 "\n", connection->remoteHost, connection->remotePort, response->code, response->status, (int64_t)bytesSent);
             } else {
                 /* sendResponse already printed something out, don't add another ews_printf */
             }
@@ -1828,9 +1828,9 @@ static THREAD_RETURN_TYPE STDCALL_ON_WIN32 connectionHandlerThread(void* connect
         }
     } else {
         ews_printf("No request found from %s:%s? Closing connection. Here's the last bytes we received in the request (length %" PRIi64 "). The total bytes received on this connection: %" PRIi64 " :\n", connection->remoteHost, connection->remotePort, (int64_t) bytesRead, connection->status.bytesReceived);
-		if (bytesRead > 0) {
-			fwrite(connection->sendRecvBuffer, 1, bytesRead, stdout);
-		}
+        if (bytesRead > 0) {
+            fwrite(connection->sendRecvBuffer, 1, bytesRead, stdout);
+        }
     }
     /* Alright - we're done */
     close(connection->socketfd);
@@ -1845,7 +1845,7 @@ static THREAD_RETURN_TYPE STDCALL_ON_WIN32 connectionHandlerThread(void* connect
     pthread_cond_signal(&connection->server->connectionFinishedCond);
     pthread_mutex_unlock(&connection->server->connectionFinishedLock);
     connectionFree(connection);
-	return (THREAD_RETURN_TYPE) NULL;
+    return (THREAD_RETURN_TYPE) NULL;
 }
 
 int serverMutexLock(struct Server* server) {
@@ -1882,7 +1882,7 @@ static const char* MIMETypeFromFile(const char* filename, const uint8_t* content
     }
     /* just start guessing based on file extension */
     if (strEndsWith(filename, "html") || strEndsWith(filename, "htm")) {
-		return "text/html; charset=UTF-8"; // kind of naughty: assume UTF-8
+        return "text/html; charset=UTF-8"; // kind of naughty: assume UTF-8
     }
     if (strEndsWith(filename, "css")) {
         return "text/css";
@@ -1925,22 +1925,22 @@ static bool strEndsWith(const char* big, const char* endsWith) {
 }
 
 static int snprintfResponseHeader(char* destination, size_t destinationCapacity, int code, const char* status, const char* contentType,  const char* extraHeaders, size_t contentLength) {
-	if (NULL == extraHeaders) {
-		extraHeaders = "";
-	}
-	return snprintf(destination,
-		destinationCapacity,
-		"HTTP/1.1 %d %s\r\n"
-		"Content-Type: %s\r\n"
-		"Content-Length: %" PRIu64 "\r\n"
-		"Server: Embeddable Web Server/" EMBEDDABLE_WEB_SERVER_VERSION_STRING "\r\n"
-		"%s"
-		"\r\n",
-		code,
-		status,
-		contentType,
-		(uint64_t)contentLength,
-		extraHeaders);
+    if (NULL == extraHeaders) {
+        extraHeaders = "";
+    }
+    return snprintf(destination,
+        destinationCapacity,
+        "HTTP/1.1 %d %s\r\n"
+        "Content-Type: %s\r\n"
+        "Content-Length: %" PRIu64 "\r\n"
+        "Server: Embeddable Web Server/" EMBEDDABLE_WEB_SERVER_VERSION_STRING "\r\n"
+        "%s"
+        "\r\n",
+        code,
+        status,
+        contentType,
+        (uint64_t)contentLength,
+        extraHeaders);
 }
 
 /* Quick unit tests */
@@ -2020,52 +2020,52 @@ static void teststrdupEscape() {
 }
 
 static void testPathEscapesRoot() {
-	assert(pathEscapesDocumentRoot("../"));
-	assert(pathEscapesDocumentRoot("/.."));
-	assert(pathEscapesDocumentRoot("/../"));
-	assert(pathEscapesDocumentRoot("/..//"));
-	assert(pathEscapesDocumentRoot("/..///"));
-	assert(pathEscapesDocumentRoot("./.."));
-	assert(pathEscapesDocumentRoot("./../"));
-	assert(pathEscapesDocumentRoot("./..//"));
-	assert(pathEscapesDocumentRoot("./..///"));
-	assert(pathEscapesDocumentRoot("./././../"));
-	assert(pathEscapesDocumentRoot("dir1/dir2/../../../"));
-	assert(!pathEscapesDocumentRoot("dir1"));
-	assert(!pathEscapesDocumentRoot("dir1/dir2"));
-	assert(!pathEscapesDocumentRoot("dir1/dir2/."));
-	assert(!pathEscapesDocumentRoot("dir1/dir2/../."));
-	assert(!pathEscapesDocumentRoot("dir1/dir2/.././"));
-	assert(!pathEscapesDocumentRoot("dir1/dir2/../.././"));
-	assert(!pathEscapesDocumentRoot("dir1/dir2/../../."));
-	assert(!pathEscapesDocumentRoot("."));
-	assert(pathEscapesDocumentRoot(".."));
-	assert(pathEscapesDocumentRoot("../.."));
-	assert(!pathEscapesDocumentRoot("test/.."));
+    assert(pathEscapesDocumentRoot("../"));
+    assert(pathEscapesDocumentRoot("/.."));
+    assert(pathEscapesDocumentRoot("/../"));
+    assert(pathEscapesDocumentRoot("/..//"));
+    assert(pathEscapesDocumentRoot("/..///"));
+    assert(pathEscapesDocumentRoot("./.."));
+    assert(pathEscapesDocumentRoot("./../"));
+    assert(pathEscapesDocumentRoot("./..//"));
+    assert(pathEscapesDocumentRoot("./..///"));
+    assert(pathEscapesDocumentRoot("./././../"));
+    assert(pathEscapesDocumentRoot("dir1/dir2/../../../"));
+    assert(!pathEscapesDocumentRoot("dir1"));
+    assert(!pathEscapesDocumentRoot("dir1/dir2"));
+    assert(!pathEscapesDocumentRoot("dir1/dir2/."));
+    assert(!pathEscapesDocumentRoot("dir1/dir2/../."));
+    assert(!pathEscapesDocumentRoot("dir1/dir2/.././"));
+    assert(!pathEscapesDocumentRoot("dir1/dir2/../.././"));
+    assert(!pathEscapesDocumentRoot("dir1/dir2/../../."));
+    assert(!pathEscapesDocumentRoot("."));
+    assert(pathEscapesDocumentRoot(".."));
+    assert(pathEscapesDocumentRoot("../.."));
+    assert(!pathEscapesDocumentRoot("test/.."));
 }
 
 static void testPathMatching() {
-	size_t matchLength;
-	assert(requestMatchesPathPrefix("/releases/current", "/", &matchLength));
-	assert(requestMatchesPathPrefix("/releases/current", "", &matchLength));
-	assert(requestMatchesPathPrefix("/releases/current", "/releases/current", &matchLength));
-	assert(requestMatchesPathPrefix("/releases/current/", "/releases/current", &matchLength));
-	assert(requestMatchesPathPrefix("/releases/current", "/releases/current/", &matchLength));
-	assert(requestMatchesPathPrefix("/files/Debug", "/files", &matchLength));
-	assert(requestMatchesPathPrefix("/", "/", &matchLength));
-	assert(!requestMatchesPathPrefix("/b", "/a", &matchLength));
-	assert(!requestMatchesPathPrefix("/.", "/a", &matchLength));
-	assert(!requestMatchesPathPrefix("/releases/currentX", "/releases/current", &matchLength));
-	assert(!requestMatchesPathPrefix("/releases/currentX", "/releases/current/", &matchLength));
-	assert(!requestMatchesPathPrefix("/releases/curren", "/releases/current", &matchLength));
+    size_t matchLength;
+    assert(requestMatchesPathPrefix("/releases/current", "/", &matchLength));
+    assert(requestMatchesPathPrefix("/releases/current", "", &matchLength));
+    assert(requestMatchesPathPrefix("/releases/current", "/releases/current", &matchLength));
+    assert(requestMatchesPathPrefix("/releases/current/", "/releases/current", &matchLength));
+    assert(requestMatchesPathPrefix("/releases/current", "/releases/current/", &matchLength));
+    assert(requestMatchesPathPrefix("/files/Debug", "/files", &matchLength));
+    assert(requestMatchesPathPrefix("/", "/", &matchLength));
+    assert(!requestMatchesPathPrefix("/b", "/a", &matchLength));
+    assert(!requestMatchesPathPrefix("/.", "/a", &matchLength));
+    assert(!requestMatchesPathPrefix("/releases/currentX", "/releases/current", &matchLength));
+    assert(!requestMatchesPathPrefix("/releases/currentX", "/releases/current/", &matchLength));
+    assert(!requestMatchesPathPrefix("/releases/curren", "/releases/current", &matchLength));
 }
 
 void EWSUnitTestsRun() {
     testHeapString();
     teststrdupHTMLEscape();
     teststrdupEscape();
-	testPathEscapesRoot();
-	testPathMatching();
+    testPathEscapesRoot();
+    testPathMatching();
     /* reset counters from tests */
     memset(&counters, 0, sizeof(counters));
 }
@@ -2075,184 +2075,184 @@ void EWSUnitTestsRun() {
 #ifdef WIN32
 
 static int pthread_detach(pthread_t threadHandle) {
-	CloseHandle(threadHandle);
-	return 0;
+    CloseHandle(threadHandle);
+    return 0;
 }
 
 /* I can't just #define this to snprintf_s because that will blow up and call an "invalid parameter handler" if you don't have enough length. */
 static int snprintf(char* destination, size_t length, const char* format, ...) {
-	va_list ap;
-	va_start(ap, format);
-	int result = vsnprintf(destination, length, format, ap);
-	va_end(ap);
-	return result;
+    va_list ap;
+    va_start(ap, format);
+    int result = vsnprintf(destination, length, format, ap);
+    va_end(ap);
+    return result;
 }
 
 static DIR* opendir(const char* path) { 
-	/* Append \\* to the path and use the Find*Files Windows API */
-	DIR* dirHandle = (DIR*)malloc(sizeof(*dirHandle));
-	wchar_t* widePath = strdupWideFromUTF8(path, 6);
-	wcscat(widePath, L"\\*");
-	dirHandle->findFiles = FindFirstFileW(widePath, &dirHandle->findData);
-	if (INVALID_HANDLE_VALUE == dirHandle->findFiles) {
-		ews_printf("Could not open path '%s' (wide path '%S'). GetLastError is %d\n", path, widePath, GetLastError());
-		free(widePath);
-		free(dirHandle);
-		return NULL;
-	}
-	free(widePath);
-	dirHandle->onFirstFile = true;
-	return dirHandle;
+    /* Append \\* to the path and use the Find*Files Windows API */
+    DIR* dirHandle = (DIR*)malloc(sizeof(*dirHandle));
+    wchar_t* widePath = strdupWideFromUTF8(path, 6);
+    wcscat(widePath, L"\\*");
+    dirHandle->findFiles = FindFirstFileW(widePath, &dirHandle->findData);
+    if (INVALID_HANDLE_VALUE == dirHandle->findFiles) {
+        ews_printf("Could not open path '%s' (wide path '%S'). GetLastError is %d\n", path, widePath, GetLastError());
+        free(widePath);
+        free(dirHandle);
+        return NULL;
+    }
+    free(widePath);
+    dirHandle->onFirstFile = true;
+    return dirHandle;
 }
 
 static struct dirent* readdir(DIR* dirHandle) {
-	memset(dirHandle->currentEntry.d_name, 0, sizeof(dirHandle->currentEntry.d_name));
-	if (dirHandle->onFirstFile) {
-		dirHandle->onFirstFile = false;
-	} else {
-		BOOL foundFile = FindNextFileW(dirHandle->findFiles, &dirHandle->findData);
-		if (!foundFile) {
-			return NULL;
-		}
-	}
-	WideCharToMultiByte(CP_UTF8, 0, dirHandle->findData.cFileName, wcslen(dirHandle->findData.cFileName), dirHandle->currentEntry.d_name, sizeof(dirHandle->currentEntry.d_name) - 1, 0, NULL);
-	return &dirHandle->currentEntry;
+    memset(dirHandle->currentEntry.d_name, 0, sizeof(dirHandle->currentEntry.d_name));
+    if (dirHandle->onFirstFile) {
+        dirHandle->onFirstFile = false;
+    } else {
+        BOOL foundFile = FindNextFileW(dirHandle->findFiles, &dirHandle->findData);
+        if (!foundFile) {
+            return NULL;
+        }
+    }
+    WideCharToMultiByte(CP_UTF8, 0, dirHandle->findData.cFileName, wcslen(dirHandle->findData.cFileName), dirHandle->currentEntry.d_name, sizeof(dirHandle->currentEntry.d_name) - 1, 0, NULL);
+    return &dirHandle->currentEntry;
 }
 
 static int closedir(DIR* dirHandle) {
-	if (INVALID_HANDLE_VALUE != dirHandle->findFiles) {
-		FindClose(dirHandle->findFiles);
-	}
-	free(dirHandle);
-	return 0;
+    if (INVALID_HANDLE_VALUE != dirHandle->findFiles) {
+        FindClose(dirHandle->findFiles);
+    }
+    free(dirHandle);
+    return 0;
 }
 
 static wchar_t* strdupWideFromUTF8(const char* utf8String, size_t extraBytes) {
-	size_t utf8StringLength = strlen(utf8String);
-	assert(utf8StringLength < INT_MAX && "No strings over 2GB please because MultiByteToWideChar does not allow that");
-	int wideStringRequiredChars = MultiByteToWideChar(CP_UTF8, 0, utf8String, (int) utf8StringLength, NULL, 0);
-	wchar_t* wideString = (wchar_t*)calloc(1, sizeof(wchar_t) * (wideStringRequiredChars + 1 + extraBytes));
-	int result = MultiByteToWideChar(CP_UTF8, 0, utf8String, utf8StringLength, wideString, wideStringRequiredChars + 1);
-	return wideString; 
+    size_t utf8StringLength = strlen(utf8String);
+    assert(utf8StringLength < INT_MAX && "No strings over 2GB please because MultiByteToWideChar does not allow that");
+    int wideStringRequiredChars = MultiByteToWideChar(CP_UTF8, 0, utf8String, (int) utf8StringLength, NULL, 0);
+    wchar_t* wideString = (wchar_t*)calloc(1, sizeof(wchar_t) * (wideStringRequiredChars + 1 + extraBytes));
+    int result = MultiByteToWideChar(CP_UTF8, 0, utf8String, utf8StringLength, wideString, wideStringRequiredChars + 1);
+    return wideString; 
 }
 
 static int pathInformationGet(const char* path, struct PathInformation* info) { 
-	wchar_t* widePath = strdupWideFromUTF8(path, 0);
-	DWORD attributes = GetFileAttributesW(widePath);
-	if (INVALID_FILE_ATTRIBUTES == attributes) {
-		DWORD lastError = GetLastError();
-		if (ERROR_FILE_NOT_FOUND == lastError || ERROR_PATH_NOT_FOUND == lastError) {
-			info->exists = false;
-			info->isDirectory = false;
-			free(widePath);
-			return 0;
-		}
-		ews_printf("We were unable to get information about path '%s'. GetFileAttributesW('%S') last error is %ld\n", path, widePath, lastError);
-		free(widePath);
-		return 1;
-	}
-	free(widePath);
-	/* If it's a hidden or system file, pretend it doesn't exist */
-	if (attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) {
-		info->exists = false;
-	} else {
-		info->exists = true;
-	}
-	if (attributes & FILE_ATTRIBUTE_DIRECTORY) {
-		info->isDirectory = true;
-	} else {
-		info->isDirectory = false;
-	}
-	return 0;
+    wchar_t* widePath = strdupWideFromUTF8(path, 0);
+    DWORD attributes = GetFileAttributesW(widePath);
+    if (INVALID_FILE_ATTRIBUTES == attributes) {
+        DWORD lastError = GetLastError();
+        if (ERROR_FILE_NOT_FOUND == lastError || ERROR_PATH_NOT_FOUND == lastError) {
+            info->exists = false;
+            info->isDirectory = false;
+            free(widePath);
+            return 0;
+        }
+        ews_printf("We were unable to get information about path '%s'. GetFileAttributesW('%S') last error is %ld\n", path, widePath, lastError);
+        free(widePath);
+        return 1;
+    }
+    free(widePath);
+    /* If it's a hidden or system file, pretend it doesn't exist */
+    if (attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)) {
+        info->exists = false;
+    } else {
+        info->exists = true;
+    }
+    if (attributes & FILE_ATTRIBUTE_DIRECTORY) {
+        info->isDirectory = true;
+    } else {
+        info->isDirectory = false;
+    }
+    return 0;
 }
 
 static void printIPv4Addresses(uint16_t portInHostOrder){
-	/* I forgot how to do this */
-	ews_printf("(Printing bound interfaces is not supported on Windows. Try http://127.0.0.1:%u if you bound to all addresses or the localhost.)\n", portInHostOrder);
+    /* I forgot how to do this */
+    ews_printf("(Printing bound interfaces is not supported on Windows. Try http://127.0.0.1:%u if you bound to all addresses or the localhost.)\n", portInHostOrder);
 }
 
 static void ignoreSIGPIPE() {
-	/* not needed on Windows */
+    /* not needed on Windows */
 }
 
 static int strcasecmp(const char* str1, const char* str2) {
-	/* lstrcmpI seems like the closest analog */
-	return lstrcmpiA(str1, str2);
+    /* lstrcmpI seems like the closest analog */
+    return lstrcmpiA(str1, str2);
 }
 
 static int pthread_create(HANDLE* threadHandle, const void* attributes, LPTHREAD_START_ROUTINE threadRoutine, void* params) {
-	*threadHandle = CreateThread(NULL, 0, threadRoutine, params, 0, NULL);
-	if (INVALID_HANDLE_VALUE == *threadHandle) {
-		ews_printf("Whoa! Failed to create a thread for routine %p\n", threadRoutine);
-		return 1;
-	}
-	return 0;
+    *threadHandle = CreateThread(NULL, 0, threadRoutine, params, 0, NULL);
+    if (INVALID_HANDLE_VALUE == *threadHandle) {
+        ews_printf("Whoa! Failed to create a thread for routine %p\n", threadRoutine);
+        return 1;
+    }
+    return 0;
 }
 
 static int pthread_cond_init(pthread_cond_t* cond, const void* attributes) {
-	InitializeConditionVariable(cond);
-	return 0;
+    InitializeConditionVariable(cond);
+    return 0;
 }
 
 static int pthread_cond_wait(pthread_cond_t* cond, pthread_mutex_t* mutex) {
-	if (SleepConditionVariableCS(cond, mutex, INFINITE)) {
-		return 0;
-	}
-	return 1;
+    if (SleepConditionVariableCS(cond, mutex, INFINITE)) {
+        return 0;
+    }
+    return 1;
 }
 
 static int pthread_cond_signal(pthread_cond_t* cond) {
-	WakeConditionVariable(cond);
-	return 0;
+    WakeConditionVariable(cond);
+    return 0;
 }
 
 static int pthread_cond_destroy(pthread_cond_t* cond) {
-	return 0;
+    return 0;
 }
 
 static int pthread_mutex_init(pthread_mutex_t* mutex, const void* attributes) {
-	InitializeCriticalSection(mutex);
-	return 0;
+    InitializeCriticalSection(mutex);
+    return 0;
 }
 
 static int pthread_mutex_lock(pthread_mutex_t* mutex) {
-	EnterCriticalSection(mutex);
-	return 0;
+    EnterCriticalSection(mutex);
+    return 0;
 }
 
 static int pthread_mutex_unlock(pthread_mutex_t* mutex) {
-	LeaveCriticalSection(mutex);
-	return 0;
+    LeaveCriticalSection(mutex);
+    return 0;
 }
 
 static int pthread_mutex_destroy(pthread_mutex_t* mutex) {
-	DeleteCriticalSection(mutex);
-	return 0;
+    DeleteCriticalSection(mutex);
+    return 0;
 }
 
 static void callWSAStartupIfNecessary() {
-	// nifty trick from http://stackoverflow.com/questions/1869689/is-it-possible-to-tell-if-wsastartup-has-been-called-in-a-process
-	// try to create a socket, and if that fails because of uninitialized winsock, then initialize winsock
-	SOCKET testsocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (SOCKET_ERROR == testsocket && WSANOTINITIALISED == WSAGetLastError()) {
-		WSADATA data = { 0 };
-		int result = WSAStartup(MAKEWORD(2, 2), &data);
-		if (0 != result) {
-			ews_printf("Calling WSAStartup failed! It returned %d with GetLastError() = %d\n", result, GetLastError());
-			abort();
-		}
-	} else {
-		close(testsocket);
-	}
+    // nifty trick from http://stackoverflow.com/questions/1869689/is-it-possible-to-tell-if-wsastartup-has-been-called-in-a-process
+    // try to create a socket, and if that fails because of uninitialized winsock, then initialize winsock
+    SOCKET testsocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (SOCKET_ERROR == testsocket && WSANOTINITIALISED == WSAGetLastError()) {
+        WSADATA data = { 0 };
+        int result = WSAStartup(MAKEWORD(2, 2), &data);
+        if (0 != result) {
+            ews_printf("Calling WSAStartup failed! It returned %d with GetLastError() = %d\n", result, GetLastError());
+            abort();
+        }
+    } else {
+        close(testsocket);
+    }
 }
 
 static FILE* fopen_utf8_path(const char* utf8Path, const char* mode) {
-	wchar_t* widePath = strdupWideFromUTF8(utf8Path, 0);
-	wchar_t* modeWide = strdupWideFromUTF8(mode, 0);
-	FILE* fp = _wfopen(widePath, modeWide);
-	free(widePath);
-	free(modeWide);
-	return fp;
+    wchar_t* widePath = strdupWideFromUTF8(utf8Path, 0);
+    wchar_t* modeWide = strdupWideFromUTF8(mode, 0);
+    FILE* fp = _wfopen(widePath, modeWide);
+    free(widePath);
+    free(modeWide);
+    return fp;
 }
 
 #if UNDEFINE_CRT_SECURE_NO_WARNINGS
@@ -2266,53 +2266,53 @@ static void callWSAStartupIfNecessary() {
 }
 
 static void ignoreSIGPIPE() {
-	void* previousSIGPIPEHandler = (void*) signal(SIGPIPE, &SIGPIPEHandler);
-	if (NULL != previousSIGPIPEHandler && previousSIGPIPEHandler != &SIGPIPEHandler) {
-		ews_printf("Warning: Uninstalled previous SIGPIPE handler:%p and installed our handler which ignores SIGPIPE\n", previousSIGPIPEHandler);
-	}
+    void* previousSIGPIPEHandler = (void*) signal(SIGPIPE, &SIGPIPEHandler);
+    if (NULL != previousSIGPIPEHandler && previousSIGPIPEHandler != &SIGPIPEHandler) {
+        ews_printf("Warning: Uninstalled previous SIGPIPE handler:%p and installed our handler which ignores SIGPIPE\n", previousSIGPIPEHandler);
+    }
 }
 
 static void printIPv4Addresses(uint16_t portInHostOrder) {
-	struct ifaddrs* addrs = NULL;
-	getifaddrs(&addrs);
-	struct ifaddrs* p = addrs;
-	while (NULL != p) {
-		if (p->ifa_addr->sa_family == AF_INET) {
-			char hostname[256];
-			getnameinfo(p->ifa_addr, sizeof(struct sockaddr_in), hostname, sizeof(hostname), NULL, 0, NI_NUMERICHOST);
-			ews_printf("Probably listening on http://%s:%u\n", hostname, portInHostOrder);
-		}
-		p = p->ifa_next;
-	}
-	if (NULL != addrs) {
-		freeifaddrs(addrs);
-	}
+    struct ifaddrs* addrs = NULL;
+    getifaddrs(&addrs);
+    struct ifaddrs* p = addrs;
+    while (NULL != p) {
+        if (p->ifa_addr->sa_family == AF_INET) {
+            char hostname[256];
+            getnameinfo(p->ifa_addr, sizeof(struct sockaddr_in), hostname, sizeof(hostname), NULL, 0, NI_NUMERICHOST);
+            ews_printf("Probably listening on http://%s:%u\n", hostname, portInHostOrder);
+        }
+        p = p->ifa_next;
+    }
+    if (NULL != addrs) {
+        freeifaddrs(addrs);
+    }
 }
 
 static int pathInformationGet(const char* path, struct PathInformation* info) {
-	struct stat st;
-	int result = stat(path, &st);
-	if (0 != result) {
-		/* There was an error. If the error is just "file not found" say the file doesn't exist */
-		if (ENOENT == errno) {
-			info->exists = false;
-			info->isDirectory = false;
-			return 0;
-		}
-		return 1;
-	}
-	/* We know the path exists. Is it a directory? */
-	info->exists = true;
-	if (S_ISDIR(st.st_mode)) {
-		info->isDirectory = true;
-	} else {
-		info->isDirectory = false;
-	}
-	return 0;
+    struct stat st;
+    int result = stat(path, &st);
+    if (0 != result) {
+        /* There was an error. If the error is just "file not found" say the file doesn't exist */
+        if (ENOENT == errno) {
+            info->exists = false;
+            info->isDirectory = false;
+            return 0;
+        }
+        return 1;
+    }
+    /* We know the path exists. Is it a directory? */
+    info->exists = true;
+    if (S_ISDIR(st.st_mode)) {
+        info->isDirectory = true;
+    } else {
+        info->isDirectory = false;
+    }
+    return 0;
 }
 
 static FILE* fopen_utf8_path(const char* utf8Path, const char* mode) {
-	return fopen(utf8Path, mode);
+    return fopen(utf8Path, mode);
 }
 #endif // WIN32 or Linux/Mac OS X
 
