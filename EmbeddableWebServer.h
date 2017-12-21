@@ -933,7 +933,7 @@ struct Response* responseAllocHTMLWithFormat(const char* format, ...) {
 }
 
 struct Response* responseAllocHTMLWithStatus(int code, const char* status, const char* html) {
-    struct Response* response = responseAlloc(200, "OK", "text/html; charset=UTF-8", 0);
+    struct Response* response = responseAlloc(code, "OK", "text/html; charset=UTF-8", 0);
     heapStringSetToCString(&response->body, html);
     return response;
 }
@@ -952,7 +952,7 @@ struct Response* responseAllocJSONWithFormat(const char* format, ...) {
 }
 
 struct Response* responseAllocJSONWithStatus(int code, const char* status, const char* json) {
-    struct Response* response = responseAlloc(200, "OK", "application/json", 0);
+    struct Response* response = responseAlloc(code, "OK", "application/json", 0);
     heapStringSetToCString(&response->body, json);
     return response;
 }
