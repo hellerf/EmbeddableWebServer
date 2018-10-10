@@ -2092,6 +2092,7 @@ static int pthread_detach(pthread_t threadHandle) {
     return 0;
 }
 
+#ifndef EWS_DISABLE_SNPRINTF_COMPAT
 /* I can't just #define this to snprintf_s because that will blow up and call an "invalid parameter handler" if you don't have enough length. */
 static int snprintf(char* destination, size_t length, const char* format, ...) {
     va_list ap;
@@ -2100,6 +2101,7 @@ static int snprintf(char* destination, size_t length, const char* format, ...) {
     va_end(ap);
     return result;
 }
+#endif
 
 static DIR* opendir(const char* path) { 
     /* Append \\* to the path and use the Find*Files Windows API */
