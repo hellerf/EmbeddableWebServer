@@ -1542,14 +1542,14 @@ static int acceptConnectionsUntilStoppedInternal(struct Server* server, const st
     int reuse = 1;
     result = setsockopt(server->listenerfd, SOL_SOCKET, SO_REUSEADDR, (char*)&reuse, sizeof(reuse));
     if (0 != result) {
-        ews_printf("Failed to setsockopt SE_REUSEADDR = true with %s = %d. Continuing because we might still succeed...\n", strerror(errno), errno);
+        ews_printf("Failed to setsockopt SO_REUSEADDR = true with %s = %d. Continuing because we might still succeed...\n", strerror(errno), errno);
     }
 
     if (address->sa_family == AF_INET6) {
         int ipv6only = 0;
             result = setsockopt(server->listenerfd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&ipv6only, sizeof(ipv6only));
             if (0 != result) {
-                ews_printf("Failed to setsockopt SE_REUSEADDR = true with %s = %d. Continuing because we might still succeed...\n", strerror(errno), errno);
+                ews_printf("Failed to setsockopt IPV6_V6ONLY = true with %s = %d. Continuing because we might still succeed...\n", strerror(errno), errno);
             }
     }
     
