@@ -14,18 +14,20 @@ Note: If you just want to take connections from a specific inteface/localhost yo
 2. Fill out createResponseForRequest. Use the responseAlloc* functions to return a response or take over the connection
 yourself and return NULL. The easiest way to serve static files is responseAllocServeFileFromRequestPath. The easiest 
 way to serve HTML is responseAllocHTML. The easiest way to serve JSON is responseAllocJSON. The server will free() your
-response once it's been sent. See the README for a quick example and the EWSDemo.cpp file for a more complete demo.
+response once it's been sent. See the README for a quick example and the EWSDemo.cpp file for more examples such as file
+ serving, HTML form processing, and JSON.
 
-EWS runs on Windows, Linux, and Mac OS X. It currently has no hope of running on a platform without dynamic memory
-allocation. It is *not suitable for Internet serving* because it has not been thoroughly designed+tested for security.
-It uses a thread per connection model, where each HTTP connection is handled by a newly spawned thread. This method is
-fairly portable if you have a quickie wrapper around pthreads.
+EWS runs on Windows, Linux, and Mac OS X. It currently requires dynamic memory especially when dealing with strings.
+ It is *not suitable for Internet serving* because it has not been thoroughly designed+tested for security.
+It uses a thread per connection model, where each HTTP connection is handled by a newly spawned thread. This lets
+ certain requests take a long time to handle while other requests can still quickly be handled.
 
 Tips:
 * Use the heapStringAppend*(&response->body) functions to dynamically build a body (see the HTML form POST demo)
+* For debugging use connectionDebugStringCreate
 * Gain extra debugging by enabling ews_print_debug
 * If you want a clean server shutdown you can use serverInit() + acceptConnectionsUntilStopped() + serverDeInit()
-* To include the file in multiple .c files use EWS_HEADER_ONLY in all places but one. This is the opposite of 
+* To include the file in multiple .c/.cpp files use EWS_HEADER_ONLY in all places but one. This is the opposite of
 STB_IMPLEMENTATION if you are familiar with the STB libraries
 * To run a server on a different thread use (even on Windows):
 #include "EmbeddableWebServer.h"
