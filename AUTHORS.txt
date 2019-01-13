@@ -1,0 +1,2 @@
+Forrest Heller - original author
+Martin Pulec - bug fixes, warning fixes, IPv6 support

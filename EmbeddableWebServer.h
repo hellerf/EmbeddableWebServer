@@ -1,4 +1,4 @@
-/* Copyright (c) Forrest Heller - All rights reserved. Released under the BSD 2-clause license:
+/* Copyright (c) Forrest Heller and contributors - All rights reserved. Released under the BSD 2-clause license:
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
@@ -380,7 +380,7 @@ static void poolStringStartNewString(struct PoolString* poolString, struct Reque
 static void poolStringAppendChar(struct Request* request, struct PoolString* string, char c);
 static bool strEndsWith(const char* big, const char* endsWith);
 static void ignoreSIGPIPE(void);
-static void callWSAStartupIfNecessary(void) __attribute__((unused));
+static void callWSAStartupIfNecessary(void);
 static FILE* fopen_utf8_path(const char* utf8Path, const char* mode);
 static int pathInformationGet(const char* path, struct PathInformation* info);
 static int sendResponseBody(struct Connection* connection, const struct Response* response, ssize_t* bytesSent);
@@ -1552,7 +1552,7 @@ static int acceptConnectionsUntilStoppedInternal(struct Server* server, const st
         int ipv6only = 0;
             result = setsockopt(server->listenerfd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&ipv6only, sizeof(ipv6only));
             if (0 != result) {
-                ews_printf("Failed to setsockopt IPV6_V6ONLY = true with %s = %d. Continuing because we might still succeed...\n", strerror(errno), errno);
+                ews_printf("Failed to setsockopt IPV6_V6ONLY = true with %s = %d. This is not supported on BSD/macOS\n", strerror(errno), errno);
             }
     }
     
@@ -1705,7 +1705,7 @@ static int sendResponseFile(struct Connection* connection, const struct Response
     } else {
         assert(sizeof(connection->sendRecvBuffer) >= MIMEReadSize);
         actualMIMEReadSize = fread(connection->sendRecvBuffer, 1, MIMEReadSize, fp);
-        if (actualMIMEReadSize == 0) {
+        if (0 == actualMIMEReadSize) {
             ews_printf("Unable to satisfy request for '%s' because we could read the first bunch of bytes to determine MIME type '%s' %s = %d\n", connection->request.path, response->filenameToSend, strerror(errno), errno);
             errorResponse = responseAlloc500InternalErrorHTML("fread for MIME type detection failed");
             goto exit;
