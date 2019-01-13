@@ -318,21 +318,21 @@ char* strdupDecodeGETorPOSTParam(const char* paramNameIncludingEquals, const cha
 char* strdupEscapeForHTML(const char* stringToEscape);
 /* If you have a file you reading/writing across connections you can use this provided pthread mutex so you don't have to make your own */
 /* Need to inspect a header in a request? */
-static const struct Header* headerInRequest(const char* headerName, const struct Request* request);
+const struct Header* headerInRequest(const char* headerName, const struct Request* request);
 /* Get a debug string representing this connection that's easy to print out. wrap it in HTML <pre> tags */
 struct HeapString connectionDebugStringCreate(const struct Connection* connection);
 /* Some really basic dynamic string handling. AppendChar and AppendFormat allocate enough memory and
  these strings are null-terminated so you can pass them into sews_printf */
-static void heapStringInit(struct HeapString* string);
-static void heapStringFreeContents(struct HeapString* string);
-static void heapStringSetToCString(struct HeapString* heapString, const char* cString);
-static void heapStringAppendChar(struct HeapString* string, char c);
-static void heapStringAppendFormat(struct HeapString* string, const char* format, ...) __printflike(2, 0);
-static void heapStringAppendString(struct HeapString* string, const char* stringToAppend);
-static void heapStringAppendFormatV(struct HeapString* string, const char* format, va_list ap);
-static void heapStringAppendHeapString(struct HeapString* target, const struct HeapString* source);
+void heapStringInit(struct HeapString* string);
+void heapStringFreeContents(struct HeapString* string);
+void heapStringSetToCString(struct HeapString* heapString, const char* cString);
+void heapStringAppendChar(struct HeapString* string, char c);
+void heapStringAppendFormat(struct HeapString* string, const char* format, ...) __printflike(2, 0);
+void heapStringAppendString(struct HeapString* string, const char* stringToAppend);
+void heapStringAppendFormatV(struct HeapString* string, const char* format, va_list ap);
+void heapStringAppendHeapString(struct HeapString* target, const struct HeapString* source);
 /* functions that help when serving files */
-static const char* MIMETypeFromFile(const char* filename, const uint8_t* contents, size_t contentsLength);
+const char* MIMETypeFromFile(const char* filename, const uint8_t* contents, size_t contentsLength);
 
 /* These are handy if you need to do something like serialize access to a file */
 int serverMutexLock(struct Server* server);
@@ -439,7 +439,7 @@ typedef enum {
 
 static void URLDecode(const char* encoded, char* decoded, size_t decodedCapacity, URLDecodeType type);
 
-static const struct Header* headerInRequest(const char* headerName, const struct Request* request) {
+const struct Header* headerInRequest(const char* headerName, const struct Request* request) {
     for (size_t i = 0; i < request->headersCount; i++) {
         assert(NULL != request->headers[i].name.contents);
         if (0 == strcasecmp(request->headers[i].name.contents, headerName)) {
@@ -706,7 +706,7 @@ static size_t heapStringNextAllocationSize(size_t required) {
     return powerOf2;
 }
 
-static void heapStringAppendChar(struct HeapString* string, char c) {
+void heapStringAppendChar(struct HeapString* string, char c) {
     heapStringReallocIfNeeded(string, string->length + 2);
     string->contents[string->length] = c;
     string->length++;
@@ -714,14 +714,14 @@ static void heapStringAppendChar(struct HeapString* string, char c) {
     string->contents[string->length] = '\0';
 }
 
-static void heapStringAppendFormat(struct HeapString* string, const char* format, ...) {
+void heapStringAppendFormat(struct HeapString* string, const char* format, ...) {
     va_list ap;
     va_start(ap, format);
     heapStringAppendFormatV(string, format, ap);
     va_end(ap);
 }
 
-static void heapStringSetToCString(struct HeapString* heapString, const char* cString) {
+void heapStringSetToCString(struct HeapString* heapString, const char* cString) {
     size_t cStringLength = strlen(cString);
     heapStringReallocIfNeeded(heapString, cStringLength + 1);
     memcpy(heapString->contents, cString, cStringLength);
@@ -729,7 +729,7 @@ static void heapStringSetToCString(struct HeapString* heapString, const char* cS
     heapString->contents[heapString->length] = '\0';
 }
 
-static void heapStringAppendString(struct HeapString* string, const char* stringToAppend) {
+void heapStringAppendString(struct HeapString* string, const char* stringToAppend) {
     size_t stringToAppendLength = strlen(stringToAppend);
     /* just exit early if the string length is too small */
     if (0 == stringToAppendLength) {
@@ -743,7 +743,7 @@ static void heapStringAppendString(struct HeapString* string, const char* string
     string->contents[string->length] = '\0';
 }
 
-static void heapStringAppendHeapString(struct HeapString* target, const struct HeapString* source) {
+void heapStringAppendHeapString(struct HeapString* target, const struct HeapString* source) {
     heapStringReallocIfNeeded(target, target->length + source->length + 1);
     memcpy(&target->contents[target->length], source->contents, source->length);
     target->length += source->length;
@@ -778,7 +778,7 @@ static bool heapStringIsSaneCString(const struct HeapString* heapString) {
     return true;
 }
 
-static void heapStringAppendFormatV(struct HeapString* string, const char* format, va_list ap) {
+void heapStringAppendFormatV(struct HeapString* string, const char* format, va_list ap) {
     /* Figure out how many characters it would take to print the string */
     va_list apCopy;
     va_copy(apCopy, ap);
@@ -794,13 +794,13 @@ static void heapStringAppendFormatV(struct HeapString* string, const char* forma
     string->contents[string->length] = '\0';
 }
 
-static void heapStringInit(struct HeapString* string) {
+void heapStringInit(struct HeapString* string) {
     string->capacity = 0;
     string->contents = NULL;
     string->length = 0;
 }
 
-static void heapStringFreeContents(struct HeapString* string) {
+void heapStringFreeContents(struct HeapString* string) {
     if (NULL != string->contents) {
         assert(string->capacity > 0 && "A heap string had a capacity > 0 with non-NULL contents which implies a malloc(0)");
         free(string->contents);
@@ -816,6 +816,7 @@ static void heapStringFreeContents(struct HeapString* string) {
         assert(string->capacity == 0 && "Why did a string with a NULL contents have a capacity > 0? This is not correct and may indicate corruption");
     }
 }
+
 struct HeapString connectionDebugStringCreate(const struct Connection* connection) {
     struct HeapString debugString = {0};
     heapStringAppendFormat(&debugString, "%s %s from %s:%s\n", connection->request.method, connection->request.path, connection->remoteHost, connection->remotePort);
@@ -1861,7 +1862,7 @@ int serverMutexUnlock(struct Server* server) {
 }
 
 /* Apache2 has a module called MIME magic or something which does a really good version of this. */
-static const char* MIMETypeFromFile(const char* filename, const uint8_t* contents, size_t contentsLength) {
+const char* MIMETypeFromFile(const char* filename, const uint8_t* contents, size_t contentsLength) {
     static const uint8_t PNGMagic[] = {137, 80, 78, 71, 13, 10, 26, 10}; // http://libpng.org/pub/png/spec/1.2/PNG-Structure.html
     static const uint8_t GIFMagic[] = {'G', 'I', 'F'}; // http://www.onicos.com/staff/iz/formats/gif.html
     static const uint8_t JPEGMagic[] = {0xFF, 0xD8}; // ehh pretty shaky http://www.fastgraph.com/help/jpeg_header_format.html
