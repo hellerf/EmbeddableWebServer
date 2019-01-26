@@ -180,7 +180,7 @@ struct Request {
     /* null-terminated HTTP version string (HTTP/1.0) */
     char version[16];
     size_t versionLength;
-    /* null-terminated HTTP path/URI ( /index.html?name=Forrest ) */
+    /* null-terminated HTTP path/URI ( /index.html?name=Forrest%20Heller ) */
     char path[1024];
     size_t pathLength;
     /* null-terminated HTTP path/URI that has been %-unescaped. Used for a file serving */
