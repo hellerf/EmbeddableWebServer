@@ -1440,7 +1440,6 @@ static void requestPrintWarnings(const struct Request* request, const char* remo
 
 static struct Connection* connectionAlloc(struct Server* server) {
     struct Connection* connection = (struct Connection*) calloc(1, sizeof(*connection)); // calloc 0's everything which requestParse depends on
-    connection->remoteAddrLength = sizeof(connection->remoteAddr);
     connection->server = server;
     return connection;
 }
@@ -1591,6 +1590,7 @@ static int acceptConnectionsUntilStoppedInternal(struct Server* server, const st
     /* allocate a connection (which sets connection->remoteAddrLength) and accept the next inbound connection */
     struct Connection* nextConnection = connectionAlloc(server);
     while (server->shouldRun) {
+        nextConnection->remoteAddrLength = sizeof(nextConnection->remoteAddr);
         nextConnection->socketfd = accept(server->listenerfd , (struct sockaddr*) &nextConnection->remoteAddr, &nextConnection->remoteAddrLength);
         if (-1 == nextConnection->socketfd) {
             if (errno == EINTR) {
