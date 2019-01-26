@@ -1132,11 +1132,11 @@ struct Response* responseAllocServeFileFromRequestPath(const char* pathPrefix, c
 #endif
     char* filePathResolved = realpath(filePath.contents, NULL);
     if (NULL == filePathResolved) {
-        printf("Warning: The file path '%s' could not be resolved with realpath. %s = %d\n", filePath.contents, strerror(errno), errno);
+        ews_printf("Warning: The file path '%s' could not be resolved with realpath. %s = %d\n", filePath.contents, strerror(errno), errno);
     }
     char* documentRootResolved = realpath(documentRoot, NULL);
     if (NULL == documentRootResolved) {
-        printf("Warning: Your documentRoot '%s' could not be resolved with realpath. %s = %d\n", documentRoot, strerror(errno), errno);
+        ews_printf("Warning: Your documentRoot '%s' could not be resolved with realpath. %s = %d\n", documentRoot, strerror(errno), errno);
     }
     ews_printf_debug("Resolved documentRoot to '%s' and file path to '%s'\n", documentRoot, filePath.contents);
     if (strlen(filePathResolved) < strlen(documentRootResolved)) {
