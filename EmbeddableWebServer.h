@@ -1148,6 +1148,7 @@ struct Response* responseAllocServeFileFromRequestPath(const char* pathPrefix, c
     if (pathInfo.isDirectory) {
         if (!OptionListDirectoryContents) {
             ews_printf("Failed to serve directory: OptionListDirectoryContents is false so we aren't serving the directory contents/listing for request '%s' documentRoot '%s', pointing at dir '%s'\n", requestPathDecoded, documentRoot, filePath.contents);
+            heapStringFreeContents(&filePath);
             return responseAllocHTMLWithStatus(403, "Forbidden", "<html><head><title>403 - Forbidden</title></head><body>You are forbidden from accessing this URL.</body></html>");
         }
         /* If it's a directory, see if we can serve up index.html */
