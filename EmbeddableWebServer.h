@@ -70,6 +70,7 @@ int main() {
 #include <stdbool.h>
 
 /* History:
+ 2019-01: Version 1.1.0 released
  2016-11: Version 1.0 released */
 
 /* Quick nifty options */
@@ -91,8 +92,8 @@ static bool OptionPrintResponse = false;
 /* contains the Response HTTP status and headers */
 #define RESPONSE_HEADER_SIZE 1024
 
-#define EMBEDDABLE_WEB_SERVER_VERSION_STRING "1.0.0"
-#define EMBEDDABLE_WEB_SERVER_VERSION 0x00010000 // major = [31:16] minor = [15:8] build = [7:0]
+#define EMBEDDABLE_WEB_SERVER_VERSION_STRING "1.1.0"
+#define EMBEDDABLE_WEB_SERVER_VERSION 0x00010100 // major = [31:16] minor = [15:8] build = [7:0]
 
 /* has someone already enabled _CRT_SECURE_NO_WARNINGS? If so, don't enable it again. If not, disable it for us. */
 #ifdef _CRT_SECURE_NO_WARNINGS
@@ -1027,7 +1028,7 @@ static bool requestMatchesPathPrefix(const char* requestPathDecoded, const char*
 /*
 Here's how the path logic works:
 
-Lets say I want to serve traffic on the 'releases/current' path out of the 'EWS-1.1' directory. EWS-1.1 has no index.html
+Let's say I want to serve traffic on the 'releases/current' path out of the 'EWS-1.1' directory. EWS-1.1 has no index.html
 pathPrefix = "/releases/current" OR "/releases/current/"
 requestPath = "/releases/current" OR "/releases/current/" OR "/releases/current/page.html"
 
