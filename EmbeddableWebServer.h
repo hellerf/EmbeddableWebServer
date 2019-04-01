@@ -323,7 +323,7 @@ const struct Header* headerInRequest(const char* headerName, const struct Reques
 /* Get a debug string representing this connection that's easy to print out. wrap it in HTML <pre> tags */
 struct HeapString connectionDebugStringCreate(const struct Connection* connection);
 /* Some really basic dynamic string handling. AppendChar and AppendFormat allocate enough memory and
- these strings are null-terminated so you can pass them into sews_printf */
+ these strings are null-terminated so you can pass them into regular string functions. */
 void heapStringInit(struct HeapString* string);
 void heapStringFreeContents(struct HeapString* string);
 void heapStringSetToCString(struct HeapString* heapString, const char* cString);
@@ -691,6 +691,7 @@ static void heapStringReallocIfNeeded(struct HeapString* string, size_t minimumC
     string->capacity = heapStringNextAllocationSize(minimumCapacity);
     assert(string->capacity > 0 && "We are about to allocate a string with 0 capacity. We should have checked this condition above");
     bool previouslyAllocated = string->contents != NULL;
+    /* Sometimes string->contents is NULL. realloc handles that case so no need for an extra if (NULL) malloc else realloc */
     string->contents = (char*) realloc(string->contents, string->capacity);
 	/* zero out the newly allocated memory */
     memset(&string->contents[string->length], 0, string->capacity - string->length);
@@ -828,7 +829,8 @@ void heapStringFreeContents(struct HeapString* string) {
 }
 
 struct HeapString connectionDebugStringCreate(const struct Connection* connection) {
-    struct HeapString debugString = {0};
+    struct HeapString debugString;
+    heapStringInit(&debugString);
     heapStringAppendFormat(&debugString, "%s %s from %s:%s\n", connection->request.method, connection->request.path, connection->remoteHost, connection->remotePort);
     heapStringAppendFormat(&debugString, "Request URL Path decoded to '%s'\n", connection->request.pathDecoded);
     heapStringAppendFormat(&debugString, "Bytes sent:%" PRId64 "\n", connection->status.bytesSent);
