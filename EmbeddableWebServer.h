@@ -2308,7 +2308,7 @@ static void printIPv4Addresses(uint16_t portInHostOrder) {
     getifaddrs(&addrs);
     struct ifaddrs* p = addrs;
     while (NULL != p) {
-        if (p->ifa_addr->sa_family == AF_INET) {
+        if (NULL != p->ifa_addr && p->ifa_addr->sa_family == AF_INET) {
             char hostname[256];
             getnameinfo(p->ifa_addr, sizeof(struct sockaddr_in), hostname, sizeof(hostname), NULL, 0, NI_NUMERICHOST);
             ews_printf("Probably listening on http://%s:%u\n", hostname, portInHostOrder);
