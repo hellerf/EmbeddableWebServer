@@ -155,8 +155,8 @@ struct Response* createResponseForRequest(const struct Request* request, struct 
             fclose(messagesFP);
         }
         serverMutexUnlock(connection->server);
-        char* nameEncoded = strdupEscapeForHTML(name);
-        char* messageEncoded = strdupEscapeForHTML(message);
+        char* nameHTMLEscaped = strdupEscapeForHTML(name);
+        char* messageHTMLEscaped = strdupEscapeForHTML(message);
         heapStringAppendFormat(&response->body,
                                "<form action=\"/form_post_demo\" method=\"POST\">\n"
                                "<table>\n"
@@ -164,14 +164,14 @@ struct Response* createResponseForRequest(const struct Request* request, struct 
                                "<tr><td>Message</td><td><input type=\"text\" name=\"message\" value=\"%s\"></td></tr>\n"
                                "<tr><td><input type=\"submit\" name=\"action\" value=\"Post\"></td></tr>\n"
                                "<tr><td><input type=\"submit\" name=\"action\" value=\"Clear All Messages\"></td></tr>\n"
-                               "</table>\n<pre>", nameEncoded, messageEncoded);
+                               "</table>\n<pre>", nameHTMLEscaped, messageHTMLEscaped);
         heapStringAppendHeapString(&response->body, &connectionDebugInfo);
         heapStringAppendString(&response->body, "</pre></body></html>\n");
         
         free(name);
-        free(nameEncoded);
+        free(nameHTMLEscaped);
         free(message);
-        free(messageEncoded);
+        free(messageHTMLEscaped);
         heapStringFreeContents(&connectionDebugInfo);
         return response;
     }
