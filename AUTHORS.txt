@@ -1,3 +1,0 @@
-Forrest Heller - original author
-Martin Pulec - bug fixes, warning fixes, IPv6 support
-Daniel Barry - bug fix (ifa_addr != NULL)
