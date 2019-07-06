@@ -1,5 +1,5 @@
 # EWS - Single .h File C Embeddable Web Server #
-Latest Version: 1.1.0 released May, 2019<br>
+Latest Version: 1.1.0 released July, 2019<br>
 Supported platforms: Linux, Mac OS X, Windows<br>
 License: BSD 2-clause<br>
 
@@ -11,6 +11,8 @@ Note: If you want to take connections from a specific inteface/localhost you can
 yourself and return NULL. The easiest way to serve static files is responseAllocServeFileFromRequestPath. The easiest 
 way to serve HTML is responseAllocHTML. The easiest way to serve JSON is responseAllocJSON. The server will free() your
 response once it's been sent.
+4. Use the `connectionDebugStringCreate` to aid in debugging.
+
 <br>See the <b>EWSDemo.cpp</b> file for more examples like chunked transfer, HTML forms, and JSON responses. 
 
 If you want to control server setup/teardown use `serverInit`, `serverStop`, and `serverDeInit` and pass that same `Server` in `acceptConnectionsUntilStopped`.
@@ -30,6 +32,7 @@ If you want to control server setup/teardown use `serverInit`, `serverStop`, and
 		if (0 == strcmp(request->pathDecoded, "/status/json")) {
 			static const char* statuses[] = { ":-)", ":-(", ":-|" };
 			int status = rand() % (sizeof(statuses) / sizeof(*statuses));
+			/* There is also a family of responseAllocJSON functions */
 			return responseAllocWithFormat(200, "OK", "application/json", "{ \"status\" : \"%s\" }", statuses[status]);
 		}
 		if (0 == strcmp(request->pathDecoded, "/100_random_numbers")) {
@@ -54,12 +57,13 @@ If you want to control server setup/teardown use `serverInit`, `serverStop`, and
  * Serve up websites for embedded touch display panels
  * Mix dynamic request handlers with static content
  * Seamless emoji support: Handles UTF-8 and international files, even on Windows (run the demo)
+ * Someone is using it for robots
 
 ## Warning ##
 This server is suitable for controlled applications which will not be accessed over the general Internet. If you are determined to use this on Internet I advise you to use a proxy server in front (like haproxy, squid, or nginx). However I found and fixed only 2 crashes with alf-fuzz...
 
 ## Implementation ##
-The server is implemented in a thread-per-connection model. This way you can do slow, hacky things in a request and not stall other requests. On the other hand you will use ~40KB + response body + request body of memory per connection. All strings are assumed to be UTF-8. On Windows, UTF-8 file paths are converted to their wide-character (wchar_t) equivalent so you can serve files with Chinese characters and so on.
+The server is implemented in a thread-per-connection model. This way you can do slow, hacky things in a request and not stall other requests. On the other hand this uses ~40KB + request body + response body of memory per connection. All strings are assumed to be UTF-8. On Windows, UTF-8 file paths are converted to their wide-character (wchar_t) equivalent so you can serve files with Chinese characters and so on.
 
 The server assumes all strings are UTF-8. When accessing the file system on Windows, EWS will convert to/from the wchar_t representation and use the appropriate APIs.
 
