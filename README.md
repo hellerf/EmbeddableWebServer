@@ -103,3 +103,15 @@ Since EWS uses threads we need to have a way to launch threads on all platforms.
 * [yocto HTTP server](https://github.com/tom-seddon/yhs) - yocto has more features (WebSockets, handling deferred requests, custom headers, and can build PNG images on the fly - pretty cool) and lets you spit out the response in pieces. If you want anything custom EWS makes you take over the whole request yourself. yocto also has better MIME type detection. EWS is smaller and handles each connection on a separate thread so one slow response doesn't block the others.
 * [Mongoose](https://github.com/cesanta/mongoose) - mongoose is professionally supported and developed, dual-licensed under GPL and a commercial license you pay for. Mongoose has a huge amount of features. It works with or without an operating system.
 * [Baraccuda](https://realtimelogic.com/products/barracuda-application-server/) - Baraccuda from Real-Time logic is a proprietary web server targetting embedded systems. I think they run with and without an OS and include lots of features like Mongoose does.
+
+## Change log ##
+### 1.1.0 ###
+* From Daniel Barry: Check for NULL pointer after calling getifaddrs()
+* From Martin Pulec: Added macro to disable snprintf compat
+* From Martin Pulec: Improved IPv6 support
+* Stop leaking string when a directory is requested but viewing directories is disabled
+* Several functions like responseAllocHTMLWithStatus() are ignoring the status code parameter and always using 200. This is breaking functions like responseAlloc404NotFoundHTML(). The browser always gets 200 OK rather than the actual response code.
+* Fixed warnings and updated comments in various places
+
+### 1.0 ###
+* Initial release
