@@ -1,5 +1,5 @@
 # EWS - Single .h File C Embeddable Web Server #
-Latest Version: 1.1.0 released July, 2019<br>
+Latest Version: 1.1.1 released August, 2019<br>
 Supported platforms: Linux, Mac OS X, Windows<br>
 License: BSD 2-clause<br>
 
@@ -10,7 +10,7 @@ Note: If you want to take connections from a specific inteface/localhost you can
 3. Fill out `createResponseForRequest`. Use the `responseAlloc*` functions to return a response or take over the connection
 yourself and return NULL. The easiest way to serve static files is responseAllocServeFileFromRequestPath. The easiest 
 way to serve HTML is responseAllocHTML. The easiest way to serve JSON is responseAllocJSON. The server will free() your
-response once it's been sent.
+response once it's been sent. When compiled with Objective-C, an autoreleasepool will be created for you.
 4. Use the `connectionDebugStringCreate` to aid in debugging.
 
 <br>See the <b>EWSDemo.cpp</b> file for more examples like chunked transfer, HTML forms, and JSON responses. 
@@ -105,6 +105,9 @@ Since EWS uses threads we need to have a way to launch threads on all platforms.
 * [Baraccuda](https://realtimelogic.com/products/barracuda-application-server/) - Baraccuda from Real-Time logic is a proprietary web server targetting embedded systems. I think they run with and without an OS and include lots of features like Mongoose does.
 
 ## Change log ##
+### 1.1.1 ###
+* When compiled with Objective-C (__OBJC__ is defined), an autoreleasepool is created around the createResponseForRequest function invocation
+
 ### 1.1.0 ###
 * From Daniel Barry: Check for NULL pointer after calling getifaddrs()
 * From Martin Pulec: Added macro to disable snprintf compat
