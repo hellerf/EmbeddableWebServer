@@ -71,6 +71,7 @@ int main() {
 #include <stdbool.h>
 
 /* History:
+ 2019-09: Version 1.1.2 released
  2019-08: Version 1.1.1 released
  2019-07: Version 1.1.0 released
  2016-11: Version 1.0 released */
@@ -94,8 +95,8 @@ static bool OptionPrintResponse = false;
 /* contains the Response HTTP status and headers */
 #define RESPONSE_HEADER_SIZE 1024
 
-#define EMBEDDABLE_WEB_SERVER_VERSION_STRING "1.1.1"
-#define EMBEDDABLE_WEB_SERVER_VERSION 0x00010100 // major = [31:16] minor = [15:8] build = [7:0]
+#define EMBEDDABLE_WEB_SERVER_VERSION_STRING "1.1.2"
+#define EMBEDDABLE_WEB_SERVER_VERSION 0x00010102 // major = [31:16] minor = [15:8] build = [7:0]
 
 /* has someone already enabled _CRT_SECURE_NO_WARNINGS? If so, don't enable it again. If not, disable it for us. */
 #ifdef _CRT_SECURE_NO_WARNINGS
@@ -443,7 +444,7 @@ static int snprintfResponseHeader(char* destination, size_t destinationCapacity,
 #endif
 
 static THREAD_RETURN_TYPE STDCALL_ON_WIN32 connectionHandlerThread(void* connectionPointer);
-static Response* createResponseForRequestAutoreleased(const struct Request* request, struct Connection* connection);
+static struct Response* createResponseForRequestAutoreleased(const struct Request* request, struct Connection* connection);
 
 typedef enum {
     URLDecodeTypeWholeURL,
@@ -1799,7 +1800,7 @@ exit:
     return result;
 }
 
-static Response* createResponseForRequestAutoreleased(const struct Request* request, struct Connection* connection) {
+static struct Response* createResponseForRequestAutoreleased(const struct Request* request, struct Connection* connection) {
     /* Objective-C users of this library have a high probability of creating Objective-C objects.
      Some Objective-C objects are autoreleased. Objective-C relies on reference counting for
      object memory management. Each object has a reference count. An object can be added to an

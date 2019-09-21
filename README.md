@@ -1,5 +1,5 @@
 # EWS - Single .h File C Embeddable Web Server #
-Latest Version: 1.1.1 released August, 2019<br>
+Latest Version: 1.1.2 released September, 2019<br>
 Supported platforms: Linux, Mac OS X, Windows<br>
 License: BSD 2-clause<br>
 
@@ -105,6 +105,9 @@ Since EWS uses threads we need to have a way to launch threads on all platforms.
 * [Baraccuda](https://realtimelogic.com/products/barracuda-application-server/) - Baraccuda from Real-Time logic is a proprietary web server targetting embedded systems. I think they run with and without an OS and include lots of features like Mongoose does.
 
 ## Change log ##
+### 1.1.2 ###
+* Fix build error when building with plain C rather than C++
+
 ### 1.1.1 ###
 * When compiled with Objective-C (__OBJC__ is defined), an autoreleasepool is created around the createResponseForRequest function invocation
 
