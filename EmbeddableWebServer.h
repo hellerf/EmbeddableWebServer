@@ -1,4 +1,4 @@
-/* EmbeddableWebServer Copyright (c) 2016, 2019 Forrest Heller, and CONTRIBUTORS (see the end of this file) - All rights reserved.
+/* EmbeddableWebServer Copyright (c) 2016, 2019, 2020 Forrest Heller, and CONTRIBUTORS (see the end of this file) - All rights reserved.
 Released under the BSD 2-clause license:
 Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
@@ -71,6 +71,7 @@ int main() {
 #include <stdbool.h>
 
 /* History:
+ 2020-05: Version 1.1.3 released
  2019-09: Version 1.1.2 released
  2019-08: Version 1.1.1 released
  2019-07: Version 1.1.0 released
@@ -95,8 +96,8 @@ static bool OptionPrintResponse = false;
 /* contains the Response HTTP status and headers */
 #define RESPONSE_HEADER_SIZE 1024
 
-#define EMBEDDABLE_WEB_SERVER_VERSION_STRING "1.1.2"
-#define EMBEDDABLE_WEB_SERVER_VERSION 0x00010102 // major = [31:16] minor = [15:8] build = [7:0]
+#define EMBEDDABLE_WEB_SERVER_VERSION_STRING "1.1.3"
+#define EMBEDDABLE_WEB_SERVER_VERSION 0x00010103 // major = [31:16] minor = [15:8] build = [7:0]
 
 /* has someone already enabled _CRT_SECURE_NO_WARNINGS? If so, don't enable it again. If not, disable it for us. */
 #ifdef _CRT_SECURE_NO_WARNINGS

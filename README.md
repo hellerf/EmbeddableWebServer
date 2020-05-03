@@ -105,6 +105,9 @@ Since EWS uses threads we need to have a way to launch threads on all platforms.
 * [Baraccuda](https://realtimelogic.com/products/barracuda-application-server/) - Baraccuda from Real-Time logic is a proprietary web server targetting embedded systems. I think they run with and without an OS and include lots of features like Mongoose does.
 
 ## Change log ##
+### 1.1.3 ###
+* Fixes https://github.com/hellerf/EmbeddableWebServer/issues/7 (pathDecodedLength is always 0)
+
 ### 1.1.2 ###
 * Fix build error when building with plain C rather than C++
 
