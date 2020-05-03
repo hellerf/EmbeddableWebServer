@@ -1,5 +1,5 @@
 # EWS - Single .h File C Embeddable Web Server #
-Latest Version: 1.1.2 released September, 2019<br>
+Latest Version: 1.1.3 released May, 2020<br>
 Supported platforms: Linux, Mac OS X, Windows<br>
 License: BSD 2-clause<br>
 
