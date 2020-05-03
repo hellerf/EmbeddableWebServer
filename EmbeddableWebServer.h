@@ -186,7 +186,8 @@ struct Request {
     /* null-terminated HTTP path/URI ( /index.html?name=Forrest%20Heller ) */
     char path[1024];
     size_t pathLength;
-    /* null-terminated HTTP path/URI that has been %-unescaped. Used for a file serving */
+    /* null-terminated HTTP path/URI that has been %-unescaped. Used for a file serving.
+     path=/index.html?%20var=s%20p pathDecoded=/index.html? var=s p */
     char pathDecoded[1024];
     size_t pathDecodedLength;
     /* null-terminated string containing the request body. Used for POST forms and JSON blobs */
@@ -451,7 +452,7 @@ typedef enum {
     URLDecodeTypeParameter
 } URLDecodeType;
 
-static void URLDecode(const char* encoded, char* decoded, size_t decodedCapacity, URLDecodeType type);
+static bool URLDecode(const char* encoded, char* decoded, size_t decodedCapacity, size_t* decodedLength, URLDecodeType type);
 
 const struct Header* headerInRequest(const char* headerName, const struct Request* request) {
     for (size_t i = 0; i < request->headersCount; i++) {
@@ -503,7 +504,10 @@ char* strdupDecodeGETorPOSTParam(const char* paramNameIncludingEquals, const cha
     }
     size_t maximumPossibleLength = strlen(paramStart);
     char* decoded = (char*) malloc(maximumPossibleLength + 1);
-    URLDecode(paramStart, decoded, maximumPossibleLength + 1, URLDecodeTypeParameter);
+    bool decodeSuccess = URLDecode(paramStart, decoded, maximumPossibleLength + 1, NULL, URLDecodeTypeParameter);
+    if (!decodeSuccess) {
+        ews_printf("Failed to decode URL parameter %s due to lack of space. This is strange because we asked for %zu capacity for the decoded string", paramNameIncludingEquals, maximumPossibleLength);
+    }
     return decoded;
 }
 
@@ -628,25 +632,31 @@ static bool pathEscapesDocumentRoot(const char* path) {
     return false;
 }
 
-static void URLDecode(const char* encoded, char* decoded, size_t decodedCapacity, URLDecodeType type) {
+static bool URLDecode(const char* encoded, char* decoded, size_t decodedCapacity, size_t* decodedLength, URLDecodeType type) {
+    /* A URL encoded string of length N should always be able to fit into a decoded string <= N */
     /* We found a value. Unescape the URL. This is probably filled with bugs */
     size_t deci = 0;
     /* these three vars unescape % escaped things */
     URLDecodeState state = URLDecodeStateNormal;
     char firstDigit = '\0';
     char secondDigit;
+    bool capacityExhausted = false;
+    size_t encodedLength = 0;
     while (1) {
         /* break out the exit conditions */
-        /* need to store a null char in decoded[decodedCapacity - 1] */
-        if (deci >= decodedCapacity - 1) {
-            break;
-        }
-        /* no encoding string left to process */
+        /* nothing left in the encoding string to process */
         if (*encoded == '\0') {
             break;
         }
         /* If we are decoding only a parameter then stop at & */
         if (*encoded == '&' && URLDecodeTypeParameter == type) {
+            break;
+        }
+        /* need to store a null char in decoded[decodedCapacity - 1] */
+        if (deci >= decodedCapacity - 1) {
+            /* Note that the capacity is only exhausted if we have more to process.
+             Thus it is the last check before '\0' and '&'. */
+            capacityExhausted = true;
             break;
         }
         switch (state) {
@@ -683,8 +693,17 @@ static void URLDecode(const char* encoded, char* decoded, size_t decodedCapacity
                 break;
         }
         encoded++;
+        encodedLength++;
     }
     decoded[deci] = '\0';
+    if (NULL != decodedLength) {
+        *decodedLength = deci;
+    }
+    if (capacityExhausted) {
+        ews_printf_debug("URLDecode: A string of length %zu could not be decoded into a string of capacity %zu\n", encodedLength, decodedCapacity);
+        return false;
+    }
+    return true;
 }
 
 static void heapStringReallocIfNeeded(struct HeapString* string, size_t minimumCapacity) {
@@ -1294,7 +1313,8 @@ static void requestParse(struct Request* request, const char* requestFragment, s
             case RequestParseStatePath:
                 if (c == ' ') {
                     /* we are done parsing the path, decode it */
-                    URLDecode(request->path, request->pathDecoded, sizeof(request->pathDecoded), URLDecodeTypeWholeURL);
+                    bool success = URLDecode(request->path, request->pathDecoded, sizeof(request->pathDecoded), &request->pathDecodedLength, URLDecodeTypeWholeURL);
+                    assert(success && "Somehow unable to decode the path--this should always work with ->pathDecoded has the same capacity as ->path");
                     request->state = RequestParseStateVersion;
                 } else if (request->pathLength < sizeof(request->path) - 1) {
                     request->path[request->pathLength] = c;
@@ -2110,12 +2130,34 @@ static void testPathMatching() {
     assert(!requestMatchesPathPrefix("/releases/curren", "/releases/current", &matchLength));
 }
 
+static void assertURLDecodeEquals(const char *input, const char *expectedOutput, URLDecodeType type) {
+    char *actualOutput = (char*)malloc(strlen(expectedOutput) + 1);
+    size_t actualOutputLength;
+    bool success = URLDecode(input, actualOutput, strlen(expectedOutput) + 1, &actualOutputLength, type);
+    assert(success);
+    assert(strcmp(actualOutput, expectedOutput) == 0);
+    assert(actualOutputLength == strlen(expectedOutput));
+}
+
+static void testURLDecode() {
+    assertURLDecodeEquals("%20", " ", URLDecodeTypeParameter);
+    assertURLDecodeEquals("%40%40%40%40", "@@@@", URLDecodeTypeParameter);
+    assertURLDecodeEquals("%25", "%", URLDecodeTypeParameter);
+    assertURLDecodeEquals("%40aaa%40", "@aaa@", URLDecodeTypeParameter);
+    assertURLDecodeEquals("%40abc", "@abc", URLDecodeTypeParameter);
+    assertURLDecodeEquals("abc%40", "abc@", URLDecodeTypeParameter);
+    assertURLDecodeEquals("abc%40", "abc@", URLDecodeTypeParameter);
+    assertURLDecodeEquals("abc%40&abc", "abc@", URLDecodeTypeParameter);
+    assertURLDecodeEquals("&abc%40&abc", "", URLDecodeTypeParameter);
+}
+
 void EWSUnitTestsRun() {
     testHeapString();
     teststrdupHTMLEscape();
     teststrdupEscape();
     testPathEscapesRoot();
     testPathMatching();
+    testURLDecode();
     /* reset counters from tests */
     memset(&counters, 0, sizeof(counters));
 }
