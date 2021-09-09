@@ -1,5 +1,5 @@
 # EWS - Single .h File C Embeddable Web Server #
-Latest Version: 1.1.3 released May, 2020<br>
+Latest Version: 1.1.4 released September 9, 2021<br>
 Supported platforms: Linux, Mac OS X, Windows<br>
 License: BSD 2-clause<br>
 
@@ -105,6 +105,9 @@ Since EWS uses threads we need to have a way to launch threads on all platforms.
 * [Baraccuda](https://realtimelogic.com/products/barracuda-application-server/) - Baraccuda from Real-Time logic is a proprietary web server targetting embedded systems. I think they run with and without an OS and include lots of features like Mongoose does.
 
 ## Change log ##
+### 1.1.4 ###
+* Fixes https://github.com/hellerf/EmbeddableWebServer/issues/10 (serverStop should not take lock if not initialized)
+
 ### 1.1.3 ###
 * Fixes https://github.com/hellerf/EmbeddableWebServer/issues/7 (pathDecodedLength is always 0)
 
@@ -124,3 +127,10 @@ Since EWS uses threads we need to have a way to launch threads on all platforms.
 
 ### 1.0 ###
 * Initial release
+
+
+## Things I would change ##
+If rewriting this from scratch I would change:
+* Right now all responses are allocated on the heap. They have to be built up into one single response. Instead I would allow for responses to be sent incrementally. So instead of responseAlloc you would have headerSend(connection, "Content-Type", "...") and bodySend("..."). It's a little more tricky to make that work and the onus of ordering goes on the user. Another advantage is that the user can deal with errors when sending pages. 
+* Why did I not prefix all functions with something like EWS? EWSServerStart, EWSResponseAlloc. I should have done that. serverStop? Come on!
+
