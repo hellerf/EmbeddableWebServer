@@ -70,13 +70,6 @@ int main() {
 
 #include <stdbool.h>
 
-/* History:
- 2020-05: Version 1.1.3 released
- 2019-09: Version 1.1.2 released
- 2019-08: Version 1.1.1 released
- 2019-07: Version 1.1.0 released
- 2016-11: Version 1.0 released */
-
 /* Quick nifty options */
 static bool OptionPrintWholeRequest = false;
 /* /status page - makes quite a few things take a lock to update counters but it doesn't make much of a difference. This isn't something like Nginx or Haywire*/
@@ -123,17 +116,18 @@ static bool OptionPrintResponse = false;
 #include <Ws2tcpip.h>
 #include <Windows.h>
 typedef int64_t ssize_t;
+/* If mingw/msys2 pthreads library is in use, it defines WIN_PHTREADS_H. Thus we do not need to include our own mini-pthreads */
 #ifndef WIN_PTHREADS_H
-typedef HANDLE pthread_t;
-typedef CRITICAL_SECTION pthread_mutex_t;
-typedef CONDITION_VARIABLE pthread_cond_t;
-#define THREAD_RETURN_TYPE DWORD
+    typedef HANDLE pthread_t;
+    typedef CRITICAL_SECTION pthread_mutex_t;
+    typedef CONDITION_VARIABLE pthread_cond_t;
+    #define THREAD_RETURN_TYPE DWORD
 #else
-#define THREAD_RETURN_TYPE void*
+    #define THREAD_RETURN_TYPE void*
 #endif // ! defined WIN_PTHREADS_H
 typedef SOCKET sockettype;
 #define STDCALL_ON_WIN32 WINAPI
-#else
+#else // not WIN32 - macOS/Linux
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netdb.h>
@@ -2420,5 +2414,5 @@ static FILE* fopen_utf8_path(const char* utf8Path, const char* mode) {
 
 #endif // EWS_HEADER_ONLY
 /* CONTRIBUTORS:
-Martin Pulec - bug fixes, warning fixes, IPv6 support
+Martin Pulec - bug fixes, warning fixes, IPv6 support, msys2/mingw support
 Daniel Barry - bug fix (ifa_addr != NULL) */
