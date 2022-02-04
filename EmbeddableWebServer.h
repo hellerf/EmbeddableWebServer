@@ -2062,6 +2062,7 @@ static void testHeapString() {
     heapStringSetToCString(&testSet, "This is a C string");
     assert(heapStringIsSaneCString(&testSet));
     assert(0 == strcmp("This is a C string", testSet.contents));
+    heapStringFreeContents(&testSet);
 }
 
 static int strcmpAndFreeFirstArg(char* firstArg, const char* secondArg) {
@@ -2146,6 +2147,7 @@ static void assertURLDecodeEquals(const char *input, const char *expectedOutput,
     assert(success);
     assert(strcmp(actualOutput, expectedOutput) == 0);
     assert(actualOutputLength == strlen(expectedOutput));
+    free(actualOutput);
 }
 
 static void testURLDecode() {
