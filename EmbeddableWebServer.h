@@ -123,12 +123,16 @@ static bool OptionPrintResponse = false;
 #include <Ws2tcpip.h>
 #include <Windows.h>
 typedef int64_t ssize_t;
+#ifndef WIN_PTHREADS_H
 typedef HANDLE pthread_t;
 typedef CRITICAL_SECTION pthread_mutex_t;
 typedef CONDITION_VARIABLE pthread_cond_t;
+#define THREAD_RETURN_TYPE DWORD
+#else
+#define THREAD_RETURN_TYPE void*
+#endif // ! defined WIN_PTHREADS_H
 typedef SOCKET sockettype;
 #define STDCALL_ON_WIN32 WINAPI
-#define THREAD_RETURN_TYPE DWORD
 #else
 #include <unistd.h>
 #include <sys/socket.h>
@@ -407,6 +411,7 @@ static int snprintfResponseHeader(char* destination, size_t destinationCapacity,
     static DIR* opendir(const char* path);
     static struct dirent* readdir(DIR* dirHandle);
     static int closedir(DIR* dirHandle);
+#ifndef WIN_PTHREADS_H
     /* pthread implementation with critical sections and conditions */
     static int pthread_detach(pthread_t threadHandle);
     static int pthread_create(HANDLE* threadHandle, const void* attributes, LPTHREAD_START_ROUTINE thread, void* param);
@@ -418,6 +423,7 @@ static int snprintfResponseHeader(char* destination, size_t destinationCapacity,
     static int pthread_mutex_lock(pthread_mutex_t* mutex);
     static int pthread_mutex_unlock(pthread_mutex_t* mutex);
     static int pthread_mutex_destroy(pthread_mutex_t* mutex);
+#endif // ! defined WIN_PTHREADS_H
 /* It was pointed out to me that snprintf is implemented in VS2015 and later*/
 #if defined(_MSC_VER) && _MSC_VER < 1900 /* 1900 = VS2015 */
 #define EWS_IMPLEMENT_SPRINTF 1
@@ -427,9 +433,11 @@ static int snprintfResponseHeader(char* destination, size_t destinationCapacity,
 #if EWS_IMPLEMENT_SPRINTF
     static int snprintf(char* destination, size_t length, const char* format, ...);
 #endif
-    static int strcasecmp(const char* utf8String1, const char* utf8String2);
     static wchar_t* strdupWideFromUTF8(const char* utf8String, size_t extraBytes);
     /* windows function aliases */
+    #ifndef strcasecmp
+      #define strcasecmp _stricmp
+    #endif // defined strcasecmp
     #define strdup(string) _strdup(string)
     #define unlink(file) _unlink(file)
     #define close(x) closesocket(x)
@@ -2167,11 +2175,6 @@ void EWSUnitTestsRun() {
 
 #ifdef WIN32
 
-static int pthread_detach(pthread_t threadHandle) {
-    CloseHandle(threadHandle);
-    return 0;
-}
-
 #if EWS_IMPLEMENT_SPRINTF /* See comment definition for details - should only be 1 on Windows < Visual Studio 2015 */
 /* I can't just #define this to snprintf_s because that will blow up and call an "invalid parameter handler" if you don't have enough length. */
 static int snprintf(char* destination, size_t length, const char* format, ...) {
@@ -2270,9 +2273,10 @@ static void ignoreSIGPIPE() {
     /* not needed on Windows */
 }
 
-static int strcasecmp(const char* str1, const char* str2) {
-    /* lstrcmpI seems like the closest analog */
-    return lstrcmpiA(str1, str2);
+#ifndef WIN_PTHREADS_H
+static int pthread_detach(pthread_t threadHandle) {
+    CloseHandle(threadHandle);
+    return 0;
 }
 
 static int pthread_create(HANDLE* threadHandle, const void* attributes, LPTHREAD_START_ROUTINE threadRoutine, void* params) {
@@ -2324,6 +2328,7 @@ static int pthread_mutex_destroy(pthread_mutex_t* mutex) {
     DeleteCriticalSection(mutex);
     return 0;
 }
+#endif // ! defined WIN_PTHREADS_H
 
 static void callWSAStartupIfNecessary() {
     // nifty trick from http://stackoverflow.com/questions/1869689/is-it-possible-to-tell-if-wsastartup-has-been-called-in-a-process
