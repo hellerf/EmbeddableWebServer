@@ -13,7 +13,7 @@ Here's the simplest way to get started:
 1. Call acceptConnectionsUntilStoppedFromEverywhereIPv4(NULL), which will initialize a new server and block
 Note: If you just want to take connections from a specific inteface/localhost you can use acceptConnectionsUntilStopped
 2. Fill out createResponseForRequest. Use the responseAlloc* functions to return a response or take over the connection
-yourself and return NULL. The easiest way to serve static files is responseAllocServeFileFromRequestPath. The easiest 
+yourself and return NULL. The easiest way to serve static files is responseAllocServeFileFromRequestPath. The easiest
 way to serve HTML is responseAllocHTML. The easiest way to serve JSON is responseAllocJSON. The server will free() your
 response once it's been sent. See the README for a quick example and the EWSDemo.cpp file for more examples such as file
  serving, HTML form processing, and JSON.
@@ -126,6 +126,7 @@ typedef int64_t ssize_t;
     #define THREAD_RETURN_TYPE void*
 #endif // ! defined WIN_PTHREADS_H
 typedef SOCKET sockettype;
+#define CORRECT_SOCKET(x) ((x) != INVALID_SOCKET)
 #define STDCALL_ON_WIN32 WINAPI
 #else // not WIN32 - macOS/Linux
 #include <unistd.h>
@@ -137,9 +138,12 @@ typedef SOCKET sockettype;
 #include <dirent.h>
 #include <strings.h>
 typedef int sockettype;
+#define CORRECT_SOCKET(x) ((x) >= 0)
 #define STDCALL_ON_WIN32
 #define THREAD_RETURN_TYPE void*
 #endif
+
+#define UNUSED(x)
 
 typedef enum  {
     RequestParseStateMethod,
@@ -256,14 +260,14 @@ struct Server {
     bool shouldRun;
     sockettype listenerfd;
     /* User field for whatever - if your request handler you can do connection->server->tag */
-    void* tag; 
+    void* tag;
 
     /* The rest of the vars just have to do with shutting down the server cleanly.
      It's a lot of work, actually! Much simpler when I just let it run forever */
     bool stopped;
     pthread_mutex_t stoppedMutex;
     pthread_cond_t stoppedCond;
-    
+
     int activeConnectionCount;
     pthread_cond_t connectionFinishedCond;
     pthread_mutex_t connectionFinishedLock;
@@ -285,9 +289,9 @@ int acceptConnectionsUntilStopped(struct Server* serverOrNULL, const struct sock
 /* use these in createResponseForRequest */
 /* Allocate a response with an initial body size that you can strcpy to */
 struct Response* responseAlloc(int code, const char* status, const char* contentType, size_t contentsLength);
-/* Serve a file from documentRoot. If you just want to serve the current directory over HTTP just do "."  
+/* Serve a file from documentRoot. If you just want to serve the current directory over HTTP just do "."
 To serve out the current directory like a normal web server do:
-responseAllocServeFileFromRequestPath("/", request->path, request->pathDecoded, ".") 
+responseAllocServeFileFromRequestPath("/", request->path, request->pathDecoded, ".")
 To serve files with a prefix do this:
 responseAllocServeFileFromRequestPath("/release/current", request->path, request->pathDecoded, "/var/root/www/release-5.0.0") so people will go to:
 http://55.55.55.55/release/current and be served /var/root/www/release-5.0.0 */
@@ -307,7 +311,7 @@ struct Response* responseAlloc400BadRequestHTML(const char* errorMessage);
 struct Response* responseAlloc404NotFoundHTML(const char* resourcePathOrNull);
 struct Response* responseAlloc500InternalErrorHTML(const char* extraInformationOrNull);
 
-/* If you care about initialization and tear-down or managing multiple servers 
+/* If you care about initialization and tear-down or managing multiple servers
  you'll want to use these functions. Otherwise you can just pass null to acceptConnections* */
 void serverInit(struct Server* server);
 void serverDeInit(struct Server* server);
@@ -392,7 +396,7 @@ static int sendResponseFile(struct Connection* connection, const struct Response
 static int snprintfResponseHeader(char* destination, size_t destinationCapacity, int code, const char* status, const char* contentType, const char* extraHeaders, size_t contentLength);
 
 #ifdef WIN32 /* Windows implementations of functions available on Linux/Mac OS X */
-    /* opendir/readdir/closedir API implementation with FindNextFile */
+/* opendir/readdir/closedir API implementation with FindNextFile */
     struct dirent {
         char d_name[1024];
     };
@@ -437,14 +441,14 @@ static int snprintfResponseHeader(char* destination, size_t destinationCapacity,
     #define close(x) closesocket(x)
     #define gai_strerror_ansi(x) gai_strerrorA(x)
 #else // WIN32
-    #define gai_strerror_ansi(x) gai_strerror(x)
-	#define EWS_IMPLEMENT_SPRINTF 0
+#define gai_strerror_ansi(x) gai_strerror(x)
+#define EWS_IMPLEMENT_SPRINTF 0
 #endif // Linux/Mac OS X
 
 #ifdef EWS_FUZZ_TEST
 #define recv(socket, buffer, bufferLength, flags) read(socket, buffer, bufferLength)
 #define send(socket, buffer, bufferLength, flags) write(STDOUT_FILENO, buffer, bufferLength)
-#define CHECK_SERVED_FILES_WITH_REALPATH 
+#define CHECK_SERVED_FILES_WITH_REALPATH
 #endif
 
 static THREAD_RETURN_TYPE STDCALL_ON_WIN32 connectionHandlerThread(void* connectionPointer);
@@ -719,7 +723,7 @@ static void heapStringReallocIfNeeded(struct HeapString* string, size_t minimumC
     bool previouslyAllocated = string->contents != NULL;
     /* Sometimes string->contents is NULL. realloc handles that case so no need for an extra if (NULL) malloc else realloc */
     string->contents = (char*) realloc(string->contents, string->capacity);
-	/* zero out the newly allocated memory */
+    /* zero out the newly allocated memory */
     memset(&string->contents[string->length], 0, string->capacity - string->length);
     if (OptionIncludeStatusPageAndCounters) {
         pthread_mutex_lock(&counters.lock);
@@ -747,7 +751,7 @@ void heapStringAppendChar(struct HeapString* string, char c) {
     heapStringReallocIfNeeded(string, string->length + 2);
     string->contents[string->length] = c;
     string->length++;
-	/* this should already be null-terminated but we'll be extra safe for web scale ^_^ */
+    /* this should already be null-terminated but we'll be extra safe for web scale ^_^ */
     string->contents[string->length] = '\0';
 }
 
@@ -801,15 +805,15 @@ static bool heapStringIsSaneCString(const struct HeapString* heapString) {
     }
     if (heapString->capacity <= heapString->length) {
         ews_printf("Heap string %p has probably overwritten invalid memory because the capacity (%" PRIu64 ") is <= length (%" PRIu64 "), which is a big nono. The capacity must always be 1 more than the length since the contents is null-terminated for convenience.\n",
-            heapString, (uint64_t) heapString->capacity, (uint64_t)heapString->length);
+                heapString, (uint64_t) heapString->capacity, (uint64_t)heapString->length);
         return false;
     }
-    
+
     if (strlen(heapString->contents) != heapString->length) {
         ews_printf("The %p strlen(heap string contents) (%" PRIu64 ") is not equal to heapString length (%" PRIu64 "), which is not correct for a C string. This can be correct if we're sending something like a PNG image which can contain '\\0' characters",
-               heapString,
-               (uint64_t) strlen(heapString->contents),
-               (uint64_t) heapString->length);
+                heapString,
+                (uint64_t) strlen(heapString->contents),
+                (uint64_t) heapString->length);
         return false;
     }
     return true;
@@ -911,7 +915,7 @@ struct HeapString connectionDebugStringCreate(const struct Connection* connectio
 static void poolStringStartNewString(struct PoolString* poolString, struct Request* request) {
     /* always re-initialize the length...just in case */
     poolString->length = 0;
-    
+
     /* this is the first string in the pool */
     if (0 == request->headersStringPoolOffset) {
         poolString->contents = request->headersStringPool;
@@ -1155,7 +1159,7 @@ struct Response* responseAllocServeFileFromRequestPath(const char* pathPrefix, c
         return response;
     }
 #ifdef CHECK_SERVED_FILES_WITH_REALPATH
-#ifdef WIN32
+    #ifdef WIN32
 #error CHECKS_SERVED_FILES_WITH_REALPATH will not work in WIN32 because Windows does not support realpath
 #endif
     char* filePathResolved = realpath(filePath.contents, NULL);
@@ -1415,7 +1419,7 @@ static void requestParse(struct Request* request, const char* requestFragment, s
                             request->body.length = 0;
                             request->state = RequestParseStateBody;
                         }
-                        
+
                     } else {
                     }
                 } else {
@@ -1479,11 +1483,13 @@ static void connectionFree(struct Connection* connection) {
     free(connection);
 }
 
+#ifndef WIN32
 static void SIGPIPEHandler(int signal) {
     (void) signal;
     /* SIGPIPE happens any time we try to send() and the connection is closed. So we just ignore it and check the return code of send...*/
     ews_printf_debug("Ignoring SIGPIPE\n");
 }
+#endif // !WIN32
 
 void serverInit(struct Server* server) {
     if (server->initialized) {
@@ -1513,7 +1519,7 @@ void serverStop(struct Server* server) {
     }
     serverMutexLock(server);
     server->shouldRun = false;
-    if (server->listenerfd >= 0) {
+    if ( CORRECT_SOCKET(server->listenerfd) ) {
         close(server->listenerfd);
     }
     serverMutexUnlock(server);
@@ -1574,7 +1580,10 @@ static int acceptConnectionsUntilStoppedInternal(struct Server* server, const st
         strcpy(addressPort, "Unknown");
     }
     server->listenerfd = socket(address->sa_family, SOCK_STREAM, IPPROTO_TCP);
-    if (server->listenerfd  <= 0) {
+    if ( !CORRECT_SOCKET(server->listenerfd) ) {
+#ifdef WIN32
+        errno = WSAGetLastError();
+#endif
         ews_printf("Could not create listener socket: %s = %d\n", strerror(errno), errno);
         return 1;
     }
@@ -1589,12 +1598,12 @@ static int acceptConnectionsUntilStoppedInternal(struct Server* server, const st
 
     if (address->sa_family == AF_INET6) {
         int ipv6only = 0;
-            result = setsockopt(server->listenerfd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&ipv6only, sizeof(ipv6only));
-            if (0 != result) {
-                ews_printf("Failed to setsockopt IPV6_V6ONLY = true with %s = %d. This is not supported on BSD/macOS\n", strerror(errno), errno);
-            }
+        result = setsockopt(server->listenerfd, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&ipv6only, sizeof(ipv6only));
+        if (0 != result) {
+            ews_printf("Failed to setsockopt IPV6_V6ONLY = true with %s = %d. This is not supported on BSD/macOS\n", strerror(errno), errno);
+        }
     }
-    
+
     result = bind(server->listenerfd, address, addressLength);
     if (0 != result) {
         ews_printf("Could not bind to %s:%s %s = %d\n", addressHost, addressPort, strerror(errno), errno);
@@ -1622,7 +1631,10 @@ static int acceptConnectionsUntilStoppedInternal(struct Server* server, const st
     while (server->shouldRun) {
         nextConnection->remoteAddrLength = sizeof(nextConnection->remoteAddr);
         nextConnection->socketfd = accept(server->listenerfd , (struct sockaddr*) &nextConnection->remoteAddr, &nextConnection->remoteAddrLength);
-        if (-1 == nextConnection->socketfd) {
+        if ( !CORRECT_SOCKET(nextConnection->socketfd) ) {
+#ifdef WIN32
+            errno = WSAGetLastError();
+#endif
             if (errno == EINTR) {
                 ews_printf("accept was interrupted, continuing if server.shouldRun is true...\n");
                 continue;
@@ -1637,7 +1649,7 @@ static int acceptConnectionsUntilStoppedInternal(struct Server* server, const st
         pthread_mutex_lock(&server->connectionFinishedLock);
         server->activeConnectionCount++;
         pthread_mutex_unlock(&server->connectionFinishedLock);
-        
+
         pthread_t connectionThread;
         /* we just received a new connection, spawn a thread */
         result = pthread_create(&connectionThread, NULL, &connectionHandlerThread, nextConnection);
@@ -1651,7 +1663,7 @@ static int acceptConnectionsUntilStoppedInternal(struct Server* server, const st
         nextConnection = connectionAlloc(server);
     }
     serverMutexLock(server);
-    if (0 != server->listenerfd && errno != EBADF) {
+    if (CORRECT_SOCKET(server->listenerfd) && errno != EBADF) {
         close(server->listenerfd);
     }
     serverMutexUnlock(server);
@@ -1689,11 +1701,11 @@ static int sendResponseBody(struct Connection* connection, const struct Response
     sendResult = send(connection->socketfd, connection->responseHeader, headerLength, 0);
     if (sendResult != headerLength) {
         ews_printf("Failed to respond to %s:%s because we could not send the HTTP response *header*. send returned %ld with %s = %d\n",
-               connection->remoteHost,
-               connection->remotePort,
-               (long) sendResult,
-               strerror(errno),
-               errno);
+                   connection->remoteHost,
+                   connection->remotePort,
+                   (long) sendResult,
+                   strerror(errno),
+                   errno);
         return -1;
     }
     if (OptionPrintResponse) {
@@ -1705,11 +1717,11 @@ static int sendResponseBody(struct Connection* connection, const struct Response
         sendResult = send(connection->socketfd, response->body.contents, response->body.length, 0);
         if (sendResult != (ssize_t) response->body.length) {
             ews_printf("Failed to respond to %s:%s because we could not send the HTTP response *body*. send returned %" PRId64 " with %s = %d\n",
-                   connection->remoteHost,
-                   connection->remotePort,
-                   (int64_t) sendResult,
-                   strerror(errno),
-                   errno);
+                    connection->remoteHost,
+                    connection->remotePort,
+                    (int64_t) sendResult,
+                    strerror(errno),
+                    errno);
             return -1;
         }
         if (OptionPrintResponse) {
@@ -1721,7 +1733,7 @@ static int sendResponseBody(struct Connection* connection, const struct Response
 }
 
 static int sendResponseFile(struct Connection* connection, const struct Response* response, ssize_t* bytesSent) {
-    /* If you were writing a high-performance web server you could use 
+    /* If you were writing a high-performance web server you could use
     sendfile, memory map the file, or any number of exciting things. But
     here we just fread the first 100 bytes to figure out MIME type, then rewind
     and send the file ~16KB at a time. */
@@ -1772,7 +1784,7 @@ static int sendResponseFile(struct Connection* connection, const struct Response
         errorResponse = responseAlloc500InternalErrorHTML("fseek to beginning of file to start sending failed");
         goto exit;
     }
-    
+
     /* now we have the file length + MIME TYpe and we can send the header */
     headerLength = snprintfResponseHeader(connection->responseHeader, sizeof(connection->responseHeader), response->code, response->status, contentType, response->extraHeaders, fileLength);
     sendResult = send(connection->socketfd, connection->responseHeader, headerLength, 0);
@@ -1827,14 +1839,14 @@ static struct Response* createResponseForRequestAutoreleased(const struct Reques
     /* Objective-C users of this library have a high probability of creating Objective-C objects.
      Some Objective-C objects are autoreleased. Objective-C relies on reference counting for
      object memory management. Each object has a reference count. An object can be added to an
-     autoreleasepool to be released when the pool is drained/dealloc'd. Since most users of 
-     Objective-C will probably want to create autoreleased objects (many constructors 
-     create them by default), we automatically add an autoreleasepool around every call to 
+     autoreleasepool to be released when the pool is drained/dealloc'd. Since most users of
+     Objective-C will probably want to create autoreleased objects (many constructors
+     create them by default), we automatically add an autoreleasepool around every call to
      createResponseForRequest. If Objective-C is not in use, then autorelease is not in use */
 #ifdef __OBJC__
     @autoreleasepool {
 #endif
-        return createResponseForRequest(request, connection);
+    return createResponseForRequest(request, connection);
 #ifdef __OBJC__
     }
 #endif
@@ -1864,11 +1876,11 @@ static THREAD_RETURN_TYPE STDCALL_ON_WIN32 connectionHandlerThread(void* connect
         requestParse(&connection->request, connection->sendRecvBuffer, bytesRead);
         if (connection->request.state >= RequestParseStateVersion && !madeRequestPrintf) {
             ews_printf_debug("Request from %s:%s: %s to %s HTTP version %s\n",
-                   connection->remoteHost,
-                   connection->remotePort,
-                   connection->request.method,
-                   connection->request.path,
-                   connection->request.version);
+                             connection->remoteHost,
+                             connection->remotePort,
+                             connection->request.method,
+                             connection->request.path,
+                             connection->request.version);
             madeRequestPrintf = true;
         }
         if (connection->request.state == RequestParseStateDone) {
@@ -1916,7 +1928,7 @@ static THREAD_RETURN_TYPE STDCALL_ON_WIN32 connectionHandlerThread(void* connect
     pthread_cond_signal(&connection->server->connectionFinishedCond);
     pthread_mutex_unlock(&connection->server->connectionFinishedLock);
     connectionFree(connection);
-    return (THREAD_RETURN_TYPE) NULL;
+    return (THREAD_RETURN_TYPE) 0;
 }
 
 int serverMutexLock(struct Server* server) {
@@ -1932,7 +1944,7 @@ const char* MIMETypeFromFile(const char* filename, const uint8_t* contents, size
     static const uint8_t PNGMagic[] = {137, 80, 78, 71, 13, 10, 26, 10}; // http://libpng.org/pub/png/spec/1.2/PNG-Structure.html
     static const uint8_t GIFMagic[] = {'G', 'I', 'F'}; // http://www.onicos.com/staff/iz/formats/gif.html
     static const uint8_t JPEGMagic[] = {0xFF, 0xD8}; // ehh pretty shaky http://www.fastgraph.com/help/jpeg_header_format.html
-    
+
     // PNG?
     if (contentsLength >= 8) {
         if (0 == memcmp(PNGMagic, contents, sizeof(PNGMagic))) {
@@ -1985,7 +1997,7 @@ static bool strEndsWith(const char* big, const char* endsWith) {
     if (bigLength < endsWithLength) {
         return false;
     }
-    
+
     for (size_t i = 0; i < endsWithLength; i++) {
         size_t bigIndex = i + (bigLength - endsWithLength);
         if (big[bigIndex] != endsWith[i]) {
@@ -2000,18 +2012,18 @@ static int snprintfResponseHeader(char* destination, size_t destinationCapacity,
         extraHeaders = "";
     }
     return snprintf(destination,
-        destinationCapacity,
-        "HTTP/1.1 %d %s\r\n"
-        "Content-Type: %s\r\n"
-        "Content-Length: %" PRIu64 "\r\n"
-        "Server: Embeddable Web Server/" EMBEDDABLE_WEB_SERVER_VERSION_STRING "\r\n"
-        "%s"
-        "\r\n",
-        code,
-        status,
-        contentType,
-        (uint64_t)contentLength,
-        extraHeaders);
+                    destinationCapacity,
+                    "HTTP/1.1 %d %s\r\n"
+                    "Content-Type: %s\r\n"
+                    "Content-Length: %" PRIu64 "\r\n"
+                                               "Server: Embeddable Web Server/" EMBEDDABLE_WEB_SERVER_VERSION_STRING "\r\n"
+                                               "%s"
+                                               "\r\n",
+            code,
+            status,
+            contentType,
+            (uint64_t)contentLength,
+            extraHeaders);
 }
 
 /* Quick unit tests */
@@ -2078,9 +2090,9 @@ static void teststrdupHTMLEscape() {
     assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML("< "), "&lt;&nbsp;"));
     assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML("> "), "&gt;&nbsp;"));
     assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML("<a"), "&lt;a"));
-	assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML(">a"), "&gt;a"));
-	assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML(">a<"), "&gt;a&lt;"));
-	assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML("><"), "&gt;&lt;"));
+    assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML(">a"), "&gt;a"));
+    assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML(">a<"), "&gt;a&lt;"));
+    assert(0 == strcmpAndFreeFirstArg(strdupEscapeForHTML("><"), "&gt;&lt;"));
 }
 
 static void teststrdupEscape() {
@@ -2182,14 +2194,15 @@ static int snprintf(char* destination, size_t length, const char* format, ...) {
 }
 #endif
 
-static DIR* opendir(const char* path) { 
+static DIR* opendir(const char* path) {
     /* Append \\* to the path and use the Find*Files Windows API */
     DIR* dirHandle = (DIR*)malloc(sizeof(*dirHandle));
     wchar_t* widePath = strdupWideFromUTF8(path, 6);
     wcscat(widePath, L"\\*");
     dirHandle->findFiles = FindFirstFileW(widePath, &dirHandle->findData);
     if (INVALID_HANDLE_VALUE == dirHandle->findFiles) {
-        ews_printf("Could not open path '%s' (wide path '%S'). GetLastError is %d\n", path, widePath, GetLastError());
+        DWORD lastError = GetLastError();
+        ews_printf("Could not open path '%s' (wide path '%S'). GetLastError is %ld\n", path, widePath, lastError);
         free(widePath);
         free(dirHandle);
         return NULL;
@@ -2226,11 +2239,11 @@ static wchar_t* strdupWideFromUTF8(const char* utf8String, size_t extraBytes) {
     assert(utf8StringLength < INT_MAX && "No strings over 2GB please because MultiByteToWideChar does not allow that");
     int wideStringRequiredChars = MultiByteToWideChar(CP_UTF8, 0, utf8String, (int) utf8StringLength, NULL, 0);
     wchar_t* wideString = (wchar_t*)calloc(1, sizeof(wchar_t) * (wideStringRequiredChars + 1 + extraBytes));
-    int result = MultiByteToWideChar(CP_UTF8, 0, utf8String, utf8StringLength, wideString, wideStringRequiredChars + 1);
-    return wideString; 
+    MultiByteToWideChar(CP_UTF8, 0, utf8String, utf8StringLength, wideString, wideStringRequiredChars + 1);
+    return wideString;
 }
 
-static int pathInformationGet(const char* path, struct PathInformation* info) { 
+static int pathInformationGet(const char* path, struct PathInformation* info) {
     wchar_t* widePath = strdupWideFromUTF8(path, 0);
     DWORD attributes = GetFileAttributesW(widePath);
     if (INVALID_FILE_ATTRIBUTES == attributes) {
@@ -2275,7 +2288,7 @@ static int pthread_detach(pthread_t threadHandle) {
     return 0;
 }
 
-static int pthread_create(HANDLE* threadHandle, const void* attributes, LPTHREAD_START_ROUTINE threadRoutine, void* params) {
+static int pthread_create(HANDLE* threadHandle, const void* UNUSED(attributes), LPTHREAD_START_ROUTINE threadRoutine, void* params) {
     *threadHandle = CreateThread(NULL, 0, threadRoutine, params, 0, NULL);
     if (INVALID_HANDLE_VALUE == *threadHandle) {
         ews_printf("Whoa! Failed to create a thread for routine %p\n", threadRoutine);
@@ -2284,7 +2297,7 @@ static int pthread_create(HANDLE* threadHandle, const void* attributes, LPTHREAD
     return 0;
 }
 
-static int pthread_cond_init(pthread_cond_t* cond, const void* attributes) {
+static int pthread_cond_init(pthread_cond_t* cond, const void* UNUSED(attributes)) {
     InitializeConditionVariable(cond);
     return 0;
 }
@@ -2301,11 +2314,11 @@ static int pthread_cond_signal(pthread_cond_t* cond) {
     return 0;
 }
 
-static int pthread_cond_destroy(pthread_cond_t* cond) {
+static int pthread_cond_destroy(pthread_cond_t* UNUSED(cond)) {
     return 0;
 }
 
-static int pthread_mutex_init(pthread_mutex_t* mutex, const void* attributes) {
+static int pthread_mutex_init(pthread_mutex_t* mutex, const void* UNUSED(attributes)) {
     InitializeCriticalSection(mutex);
     return 0;
 }
@@ -2330,11 +2343,12 @@ static void callWSAStartupIfNecessary() {
     // nifty trick from http://stackoverflow.com/questions/1869689/is-it-possible-to-tell-if-wsastartup-has-been-called-in-a-process
     // try to create a socket, and if that fails because of uninitialized winsock, then initialize winsock
     SOCKET testsocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (SOCKET_ERROR == testsocket && WSANOTINITIALISED == WSAGetLastError()) {
+    if (!CORRECT_SOCKET(testsocket) && WSANOTINITIALISED == WSAGetLastError()) {
         WSADATA data = { 0 };
         int result = WSAStartup(MAKEWORD(2, 2), &data);
         if (0 != result) {
-            ews_printf("Calling WSAStartup failed! It returned %d with GetLastError() = %d\n", result, GetLastError());
+            DWORD lastError = GetLastError();
+            ews_printf("Calling WSAStartup failed! It returned %d with GetLastError() = %ld\n", result, lastError);
             abort();
         }
     } else {
